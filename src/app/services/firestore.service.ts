@@ -7,18 +7,8 @@ import { AuthService } from './auth.service';
 
 // --- Configuration (Expected to be provided globally) ---
 declare var __app_id: string | undefined;
-declare var __firebase_config: string | undefined;
-declare var __initial_auth_token: string | undefined;
 
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-sprint-app-id';
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-    apiKey: "YOUR_API_KEY", // Replace with your actual Firebase config
-    authDomain: "YOUR_AUTH_DOMAIN",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_STORAGE_BUCKET",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
-};
 
 // --- Firestore Service ---
 @Injectable({ providedIn: 'root' })

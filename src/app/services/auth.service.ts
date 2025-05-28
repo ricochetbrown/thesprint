@@ -13,12 +13,12 @@ declare var __firebase_config: string | undefined;
 declare var __initial_auth_token: string | undefined;
 
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-    apiKey: "YOUR_API_KEY", // Replace with your actual Firebase config
-    authDomain: "YOUR_AUTH_DOMAIN",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_STORAGE_BUCKET",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyCYm-KBnrubR-gfsNqGe45luD3FowJsBVg",
+    authDomain: "the-sprint-logic.firebaseapp.com",
+    projectId: "the-sprint-logic",
+    storageBucket: "the-sprint-logic.firebasestorage.app",
+    messagingSenderId: "491672865201",
+    appId: "1:491672865201:web:c580e2d53a2f3cd6345590"
 };
 
 // --- Authentication Service ---

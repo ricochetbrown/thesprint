@@ -15,12 +15,15 @@ import { FormsModule } from "@angular/forms";
                 </div>
 
                 <form (submit)="handleAuth()">
-                    <div *ngIf="showRegisterForm()">
-                        <div class="mb-4">
-                            <label for="displayName" class="block text-sm font-medium mb-1">Display Name</label>
-                            <input type="text" [(ngModel)]="displayName" name="displayName" class="w-full p-3 bg-slate-600 rounded border border-slate-500" placeholder="AgileAvenger">
+                    @if (showRegisterForm()) {
+                        <div>
+                            <div class="mb-4">
+                                <label for="displayName" class="block text-sm font-medium mb-1">Display Name</label>
+                                <input type="text" [(ngModel)]="displayName" name="displayName" class="w-full p-3 bg-slate-600 rounded border border-slate-500" placeholder="AgileAvenger">
+                            </div>
                         </div>
-                    </div>
+                    }
+                    
                     <div class="mb-4">
                         <label for="email" class="block text-sm font-medium mb-1">Email</label>
                         <input type="email" [(ngModel)]="email" name="email" required class="w-full p-3 bg-slate-600 rounded border border-slate-500" placeholder="you@example.com">
@@ -29,12 +32,17 @@ import { FormsModule } from "@angular/forms";
                         <label for="password" class="block text-sm font-medium mb-1">Password</label>
                         <input type="password" [(ngModel)]="password" name="password" required class="w-full p-3 bg-slate-600 rounded border border-slate-500" placeholder="••••••••">
                     </div>
-                    <div *ngIf="showRegisterForm()" class="mb-6">
-                        <label for="confirmPassword" class="block text-sm font-medium mb-1">Confirm Password</label>
-                        <input type="password" [(ngModel)]="confirmPassword" name="confirmPassword" class="w-full p-3 bg-slate-600 rounded border border-slate-500" placeholder="••••••••">
-                    </div>
 
-                    <p *ngIf="authError()" class="text-red-400 text-sm mb-4">{{ authError() }}</p>
+                    @if (showRegisterForm()) {
+                        <div class="mb-6">
+                            <label for="confirmPassword" class="block text-sm font-medium mb-1">Confirm Password</label>
+                            <input type="password" [(ngModel)]="confirmPassword" name="confirmPassword" class="w-full p-3 bg-slate-600 rounded border border-slate-500" placeholder="••••••••">
+                        </div>
+                    }
+
+                    @if (authError()) {
+                        <p class="text-red-400 text-sm mb-4">{{ authError() }}</p>
+                    }
 
                     <button type="submit" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg text-lg">
                         {{ showRegisterForm() ? 'Register' : 'Log In' }}

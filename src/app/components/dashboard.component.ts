@@ -37,38 +37,42 @@ import { CommonModule } from "@angular/common";
                     </button>
                 </div>
             </div>
-            <p *ngIf="actionError()" class="text-center text-red-400 mb-4">{{actionError()}}</p>
+            @if (actionError()) {
+                <p class="text-center text-red-400 mb-4">{{actionError()}}</p>
+            }
 
-            <div *ngIf="showCreateModal()" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4">
-                <div class="bg-slate-800 p-8 rounded-lg shadow-xl w-full max-w-lg">
-                    <h2 class="text-3xl font-semibold mb-6 text-center">Configure Your Game</h2>
-                    <form (submit)="handleCreateGame()">
-                        <div class="mb-4">
-                            <label for="gameName" class="block text-sm font-medium mb-1">Game Name (Optional)</label>
-                            <input type="text" [(ngModel)]="newGameName" name="gameName" class="w-full p-3 bg-slate-600 rounded border border-slate-500" placeholder="My Awesome Sprint">
-                        </div>
-                        <div class="mb-4">
-                            <label for="maxPlayers" class="block text-sm font-medium mb-1">Number of Players</label>
-                            <select [(ngModel)]="newGameMaxPlayers" name="maxPlayers" class="w-full p-3 bg-slate-600 rounded border border-slate-500">
-                                <option value="5">5 Players</option>
-                                <option value="6">6 Players</option>
-                                <option value="7">7 Players</option>
-                                </select>
-                        </div>
-                        <div class="mb-6">
-                            <label class="block text-sm font-medium mb-1">Visibility</label>
-                            <div class="flex gap-4">
-                                <label><input type="radio" [(ngModel)]="newGameIsPublic" name="isPublic" [value]="true" class="mr-1"> Public</label>
-                                <label><input type="radio" [(ngModel)]="newGameIsPublic" name="isPublic" [value]="false" class="mr-1"> Private</label>
+            @if (showCreateModal()) {
+                <div class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4">
+                    <div class="bg-slate-800 p-8 rounded-lg shadow-xl w-full max-w-lg">
+                        <h2 class="text-3xl font-semibold mb-6 text-center">Configure Your Game</h2>
+                        <form (submit)="handleCreateGame()">
+                            <div class="mb-4">
+                                <label for="gameName" class="block text-sm font-medium mb-1">Game Name (Optional)</label>
+                                <input type="text" [(ngModel)]="newGameName" name="gameName" class="w-full p-3 bg-slate-600 rounded border border-slate-500" placeholder="My Awesome Sprint">
                             </div>
-                        </div>
-                        <div class="flex justify-end gap-4">
-                            <button type="button" (click)="showCreateModal.set(false)" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded">Cancel</button>
-                            <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded">Create & Go to Lobby</button>
-                        </div>
-                    </form>
+                            <div class="mb-4">
+                                <label for="maxPlayers" class="block text-sm font-medium mb-1">Number of Players</label>
+                                <select [(ngModel)]="newGameMaxPlayers" name="maxPlayers" class="w-full p-3 bg-slate-600 rounded border border-slate-500">
+                                    <option value="5">5 Players</option>
+                                    <option value="6">6 Players</option>
+                                    <option value="7">7 Players</option>
+                                    </select>
+                            </div>
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium mb-1">Visibility</label>
+                                <div class="flex gap-4">
+                                    <label><input type="radio" [(ngModel)]="newGameIsPublic" name="isPublic" [value]="true" class="mr-1"> Public</label>
+                                    <label><input type="radio" [(ngModel)]="newGameIsPublic" name="isPublic" [value]="false" class="mr-1"> Private</label>
+                                </div>
+                            </div>
+                            <div class="flex justify-end gap-4">
+                                <button type="button" (click)="showCreateModal.set(false)" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded">Cancel</button>
+                                <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded">Create & Go to Lobby</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
-            </div>
+            }
         </div>
     `,
     imports: [

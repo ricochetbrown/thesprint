@@ -30,19 +30,27 @@ const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__f
     standalone: true,
     template: `
         <div class="min-h-screen bg-gray-900 text-white">
-            <div *ngIf="!authService.isAuthReady()" class="flex items-center justify-center h-screen">
-                Loading Authentication...
-            </div>
-
-            <ng-container *ngIf="authService.isAuthReady()">
-                <app-login *ngIf="!authService.currentUser() && activeView() === 'login'"></app-login>
+            @if (!authService.isAuthReady()) {
+                <div class="flex items-center justify-center h-screen">
+                    Loading Authentication...
+                </div>
+            }
+            
+            @if (authService.isAuthReady()) {
+                @if (!authService.currentUser() && activeView() === 'login') {
+                    <app-login></app-login>
+                }
                 
-                <ng-container *ngIf="authService.currentUser()">
-                    <app-dashboard *ngIf="activeView() === 'dashboard' && !gameService.activeGameId()"></app-dashboard>
-                    <app-lobby *ngIf="gameService.activeGameId() && gameService.currentGame()?.status === 'lobby'"></app-lobby>
-                    <app-game-board *ngIf="gameService.activeGameId() && gameService.currentGame()?.status !== 'lobby'"></app-game-board>
-                </ng-container>
-            </ng-container>
+                @if (authService.currentUser()) {
+                    @if (activeView() === 'dashboard' && !gameService.activeGameId()) {
+                        <app-dashboard></app-dashboard>
+                    } @else if (gameService.activeGameId() && gameService.currentGame()?.status === 'lobby') {
+                        <app-lobby></app-lobby>
+                    } @else if (gameService.activeGameId() && gameService.currentGame()?.status !== 'lobby') {
+                        <app-game-board></app-game-board>
+                    }
+                }
+            }
         </div>
     `,
     imports: [LoginComponent, DashboardComponent, LobbyComponent, GameBoardComponent] // Import standalone components

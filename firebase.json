@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "dist/the-sprint",
+    "public": "dist/the-sprint/browser",
     "ignore": [
       "firebase.json",
       "**/.*",

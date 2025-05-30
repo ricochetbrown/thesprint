@@ -289,7 +289,7 @@ export class GameService {
 
         await this.firestoreService.updateDocument('games', gameId, {
             teamVote: { proposedTeam: teamPlayerIds, votes: {} },
-            status: 'teamVote',
+            status: 'teamVoting',
             gameLog: [...(game.gameLog || []), gameLogEntry]
         }, true);
     }

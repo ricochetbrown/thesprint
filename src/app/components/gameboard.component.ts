@@ -1,5 +1,5 @@
 import { Component, computed, inject } from "@angular/core";
-import { Game } from "../interfaces/game.interface";
+import { Game, Player } from "../interfaces/game.interface";
 import { AuthService } from "../services/auth.service";
 import { GameService } from "../services/game.service";
 import { CommonModule } from "@angular/common";
@@ -16,6 +16,10 @@ import { FormsModule } from "@angular/forms";
                 <div>My Role: <span class="font-bold text-cyan-400">{{ myRole() }}</span></div>
                 <button (click)="gameService.leaveGame()" class="text-red-300 hover:text-red-100">Quit Game</button>
             </nav>
+
+            @if (gameService.currentGame(); as game) {
+
+            }
 
             @if (gameService.currentGame(); as game) {
                 <div class="flex-grow container mx-auto p-4">
@@ -67,6 +71,20 @@ import { FormsModule } from "@angular/forms";
                                         <p class="mb-2">
                                             You are the TO. Select {{ getNumToSelect(game) }} players for User Story #{{game.currentStoryNum}}.
                                         </p>
+                                        <div class="flex flex-wrap gap-2 mb-4">
+                                            @for (playerId of game.playerOrder; track playerId) {
+                                                <button class="px-3 py-1 rounded"
+                                                        [ngClass]="{'bg-blue-500 text-white': selectedPlayers.includes(playerId), 'bg-gray-300 text-black': !selectedPlayers.includes(playerId)}"
+                                                        (click)="togglePlayerSelection(playerId, game)">
+                                                        {{ game.players[playerId]?.name }}
+                                                </button>
+                                            }
+                                        </div>
+                                        <button (click)="proposeTeam(game)"
+                                                [disabled]="selectedPlayers.length !== getNumToSelect(game)"
+                                                class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded disabled:opacity-50 disabled:cursor-not-allowed">
+                                                Propose Team
+                                        </button>
                                     } @else {
                                         <p class="mb-2">
                                             Waiting for {{ game.players[game.currentTO_id!].name }} (TO) to propose a team.
@@ -79,12 +97,34 @@ import { FormsModule } from "@angular/forms";
                             }
                             @case ('teamVoting') {
                                 <div>
-                                    <p class="mb-2">Team proposed by {{ game.players[game.currentTO_id!].name }}: 
-                                        <span class="font-bold">{{ getProposedTeamNames(game) }}</span>
-                                    </p>
-                                    <p class="mb-4">Vote to AGREE or RETHROW.</p>
-                                    <button class="bg-green-500 hover:bg-green-600 px-6 py-3 rounded text-lg mr-2">AGREE (TODO)</button>
-                                    <button class="bg-red-500 hover:bg-red-600 px-6 py-3 rounded text-lg">RETHROW (TODO)</button>
+                                    <p class="mb-2">Team proposed by {{ game.players[game.currentTO_id!].name }}. Vote:</p>
+                                    <div class="mb-4 text-lg">
+                                        <!-- Highlight players who haven't voted -->
+                                        Proposed Team:
+                                        @for (playerId of game.playerOrder; track playerId) {
+                                            <span [ngClass]="{'font-bold': game.teamVote?.votes?.[playerId] === undefined}">
+                                                {{ game.players[playerId]?.name }}
+                                                @if (!$last){ 
+                                                    ', ' 
+                                                }
+                                            </span>
+                                        }
+
+                                        <p class="mb-2">
+                                            Votes Cast: {{ game.teamVote?.votes ? Object.keys(game.teamVote.votes).length : 0 }} / {{ game.playerOrder.length }}
+                                        </p>
+
+                                        <p class="mb-4">Vote to AGREE or RETHROW.</p>
+                                        <button (click)="gameService.submitVote('agree')"
+                                                [disabled]="!!game.teamVote?.votes?.[authService.userId()!]"
+                                                class="bg-green-500 hover:bg-green-600 px-6 py-3 rounded text-lg mr-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                                AGREE
+                                        </button>
+                                        <button (click)="gameService.submitVote('rethrow')"
+                                                [disabled]="!!game.teamVote?.votes?.[authService.userId()!]">
+                                        </button>
+                                        <button (click)="gameService.submitVote('rethrow')" class="bg-red-500 hover:bg-red-600 px-6 py-3 rounded text-lg">RETHROW</button>
+                                    </div>
                                 </div>
                             }
                             @case ('mission') {
@@ -93,9 +133,28 @@ import { FormsModule } from "@angular/forms";
                                     @if (isPlayerOnMission(game)) {
                                         <p class="mb-4">Play your card (Approve/Request).</p>
                                         <div class="flex gap-4">
-                                            <button class="bg-green-600 p-4 rounded w-24 h-32">APPROVE (TODO)</button>
-                                            <button class="bg-red-600 p-4 rounded w-24 h-32">REQUEST (TODO)</button>
+                                            <button (click)="gameService.submitMissionCard('approve')"
+                                                    [disabled]="!!game.mission?.cardsPlayed?.[authService.userId()!]"
+                                                    class="bg-green-600 p-4 rounded w-24 h-32 disabled:opacity-50 disabled:cursor-not-allowed">
+                                                APPROVE
+                                            </button>
+                                            <button (click)="gameService.submitMissionCard('request')"
+                                                    [disabled]="!!game.mission?.cardsPlayed?.[authService.userId()!]"
+                                                    class="bg-green-600 p-4 rounded w-24 h-32 disabled:opacity-50 disabled:cursor-not-allowed">
+                                                APPROVE
+                                            </button>
+                                            <button (click)="gameService.submitMissionCard('request')"
+                                                    [disabled]="!!game.mission?.cardsPlayed?.[authService.userId()!]"
+                                                    class="bg-red-600 p-4 rounded w-24 h-32 disabled:opacity-50 disabled:cursor-not-allowed">
+                                                REQUEST
+                                            </button>
                                         </div>
+                                        <p class="mt-4 text-sm">
+                                            Cards Played: {{ game.mission?.cardsPlayed ? Object.keys(game.mission?.cardsPlayed).length : 0 }} / {{ game.mission?.team?.length }}
+                                                    [disabled]="!!game.mission?.cardsPlayed?.[authService.userId()!]"
+                                                    class="bg-red-600 p-4 rounded w-24 h-32 disabled:opacity-50 disabled:cursor-not-allowed">
+                                                REQUEST
+                                        </p>
                                     } @else {
                                         <p class="mb-4">Waiting for mission results...</p>
                                     }
@@ -103,8 +162,17 @@ import { FormsModule } from "@angular/forms";
                             }
                             @case ('results') {
                                 <div>
-                                    <p class="mb-2">Displaying results for User Story #{{ (game.currentStoryNum || 1) -1 }} or Vote...</p>
-                                    <button class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded">Next Round (TODO)</button>
+                                @if (game.storyResults && (game.currentStoryNum ?? 1) > 1) {
+                                    @if (game.storyResults[(game.currentStoryNum ?? 1) - 2] === 'dexter') {
+                                        <p class="text-xl font-bold text-green-400 mb-4">User Story #{{ (game.currentStoryNum ?? 1) - 1 }} Succeeded!</p>
+                                    } @else if (game.storyResults[(game.currentStoryNum ?? 1) - 2] === 'sinister') {
+                                        <p class="text-xl font-bold text-red-400 mb-4">User Story #{{ (game.currentStoryNum ?? 1) - 1 }} Failed!</p>
+                                    }
+                                } @else {
+                                    <p class="mb-2">Processing results...</p>
+                                }
+
+                                <button (click)="nextRound()" class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded">Next Round</button>
                                 </div>
                             }
                             @case ('gameOver') {
@@ -140,6 +208,8 @@ import { FormsModule } from "@angular/forms";
 export class GameBoardComponent {
     authService = inject(AuthService);
     gameService = inject(GameService);
+
+ selectedPlayers: string[] = []; // Array to hold selected player IDs for team proposal
 
     myRole = computed(() => {
         const game = this.gameService.currentGame();
@@ -219,9 +289,12 @@ export class GameBoardComponent {
         return "Your objective will be revealed.";
     }
 
-    // --- Action Methods (TODO) ---
     proposeTeam(): void {
         console.log("Propose Team clicked");
         this.gameService.proposeTeam();
+    }
+
+    nextRound(): void {
+        this.gameService.nextRound();
     }
 }

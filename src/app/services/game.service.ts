@@ -32,13 +32,27 @@ export class GameService {
                         this.currentGame.set(gameData);
                         console.log("Game data updated:", gameData);
 
-                        // Check if the current player is an AI and is the current TO
-                        const game = this.currentGame();
-                        const currentUserId = this.authService.userId();
-                        const isAI = currentUserId && gameId.startsWith(gameId + '-AI-'); // Check if the gameId is part of the AI ID
+                        const currentUserId = this.authService.userId(); // Get current user ID inside the listener
+                        const game = gameData; // Use the updated game data
 
-                        if (game && currentUserId && isAI && game.currentTO_id === currentUserId && game.status === 'teamProposal') {
+                        // Check if the current player is an AI and is the current TO for team proposal
+                        const isAICheckProposal = currentUserId && game?.id && currentUserId.startsWith(game.id + '-AI-'); // Check if the gameId is part of the AI ID
+
+                        if (game && currentUserId && isAICheckProposal && game.currentTO_id === currentUserId && game.status === 'teamProposal' && !game.teamVote) {
                             this.aiProposeTeam();
+                        }
+
+                        // Check if the current player is an AI and needs to play a mission card
+                        const isAICheckMission = currentUserId && game?.id && currentUserId.startsWith(game.id + '-AI-'); // Check if the gameId is part of the AI ID
+
+                        if (game && currentUserId && isAICheckMission && game.status === 'mission' && game.mission?.team?.includes(currentUserId) && !game.mission?.cardsPlayed?.[currentUserId]) {
+                            this.aiSubmitMissionCard();
+                        }
+
+                        // Check if the current player is an AI and needs to vote
+                         const isAICheck = currentUserId && game?.id?.startsWith(game.id + '-AI-'); // Check if the gameId is part of the AI ID
+                        if (game && currentUserId && isAICheck && game.status === 'teamVoting' && !game.teamVote?.votes?.[currentUserId]) {
+                             this.aiSubmitVote();
                         }
                     },
                     true 
@@ -272,7 +286,7 @@ export class GameService {
         };
 
         await this.firestoreService.updateDocument('games', gameId, {
-            currentTeam: teamPlayerIds,
+            teamVote: { proposedTeam: teamPlayerIds, votes: {} },
             status: 'teamVote',
             gameLog: [...(game.gameLog || []), gameLogEntry]
         }, true);
@@ -331,4 +345,227 @@ export class GameService {
         // Call the proposeTeam() method with the randomly selected team
         await this.proposeTeam(proposedTeam);
     }
+
+    async submitVote(vote: 'agree' | 'rethrow'): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = this.authService.userId();
+
+        if (!gameId || !game || !currentUserId) {
+            throw new Error("Game or user not available.");
+        }
+
+        // 1. Check if the current game status is 'teamVote'.
+        if (game.status !== 'teamVoting') {
+            throw new Error("Voting is not currently open.");
+        }
+
+        // 2. Record the current user's vote.
+        const updatedVotes = {
+            ...(game.teamVote?.votes || {}),
+            [currentUserId]: vote
+        };
+
+        const gameLogEntry = {
+            timestamp: new Date(),
+            message: `${game.players[currentUserId]?.name || 'Player'} voted to ${vote} the team.`
+        };
+
+        await this.firestoreService.updateDocument('games', gameId, {
+            teamVote: {
+                ...game.teamVote,
+                votes: updatedVotes
+            },
+            gameLog: [...(game.gameLog || []), gameLogEntry]
+        }, true);
+
+        // 4. After recording the vote, check if all players have voted.
+        const playerIds = game.playerOrder || [];
+        const allVoted = playerIds.every(playerId => updatedVotes.hasOwnProperty(playerId));
+
+        // 5. If all players have voted, process the votes.
+        if (allVoted) {
+            const voteCounts = Object.values(updatedVotes).reduce((acc, currentVote) => {
+                acc[currentVote] = (acc[currentVote] || 0) + 1;
+                return acc;
+            }, { agree: 0, rethrow: 0 });
+
+            let nextStatus: Game['status'];
+            let nextTOId = game.currentTO_id;
+            let nextVoteFails = game.voteFailsThisRound ?? 0;
+            let additionalLogMessage = '';
+
+            // 5b. If 'agree' votes are more than 'rethrow' votes.
+            if (voteCounts.agree > voteCounts.rethrow) {
+                nextStatus = 'mission';
+                additionalLogMessage = `Team approved with ${voteCounts.agree} agree votes and ${voteCounts.rethrow} rethrow votes. Starting mission.`;
+                nextVoteFails = 0; // Reset vote fails on successful vote
+            }
+            // 5c. If 'rethrow' votes are more than or equal to 'agree' votes.
+            else {
+                nextVoteFails++;
+                if (nextVoteFails >= 5) {
+                    nextStatus = 'gameOver'; // Or a specific 'sinisterWins' status
+                    additionalLogMessage = `Team rejected. This was the 5th failed vote. Sinister Spy wins!`;
+                } else {
+                    nextStatus = 'teamProposal';
+                    const currentTOIndex = playerIds.indexOf(game.currentTO_id!);
+                    const nextTOIndex = (currentTOIndex + 1) % playerIds.length;
+                    nextTOId = playerIds[nextTOIndex];
+                    additionalLogMessage = `Team rejected with ${voteCounts.rethrow} rethrow votes and ${voteCounts.agree} agree votes. ${game.players[nextTOId]?.name || 'Next Team Leader'} is now the Team Leader.`;
+                }
+            }
+
+            await this.firestoreService.updateDocument('games', gameId, {
+                status: nextStatus,
+                currentTO_id: nextTOId,
+                voteFailsThisRound: nextVoteFails,
+                gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: additionalLogMessage }],
+                teamVote: null, // Clear the team vote data for the next round
+            }, true);
+        }
+    }
+
+    async aiSubmitVote(): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = this.authService.userId(); // Get current user ID inside the async function
+
+        if (!gameId || !game || !currentUserId) {
+            return; // No active game or user
+        }
+
+        // Check if the current player is an AI, is the current TO, and needs to vote
+        const isAI = currentUserId.startsWith(gameId + '-AI-'); // Example AI ID check
+        if (!isAI || game.status !== 'teamVoting' || game.teamVote?.votes?.[currentUserId]) {
+            return; // Not an AI or already voted or not in voting phase
+        }
+
+        // Determine the vote: 'agree' if 5th rethrow (index 4), otherwise random
+        const vote: 'agree' | 'rethrow' = (game.voteFailsThisRound ?? 0) === 4 ? 'agree' : (Math.random() > 0.5 ? 'agree' : 'rethrow');
+
+        await this.submitVote(vote);
+    }
+
+    async aiSubmitMissionCard(): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = this.authService.userId(); // Get current user ID inside the async function
+
+        if (!gameId || !game || !currentUserId) {
+            return; // No active game or user
+        }
+
+        // Check if the current player is an AI, the game status is 'mission', and their card is not played
+        const isAI = currentUserId.startsWith(gameId + '-AI-'); // Example AI ID check
+        if (!isAI || game.status !== 'mission' || !game.mission?.team?.includes(currentUserId) || game.mission?.cardsPlayed?.[currentUserId]) {
+            return; // Not an AI or not on mission or not in mission phase or already played
+        }
+
+        // Determine the card to play based on AI role
+        const aiRole = game.roles?.[currentUserId];
+        let card: 'approve' | 'request' = 'approve'; // Default to approve for Dexter
+
+        // Sinister roles typically play 'request'
+        if (aiRole === 'SinisterSpy' || aiRole === 'Sniper') {
+            card = 'request';
+        }
+
+        // Special case for Duke (Loyal Dexter) - must approve
+        if (aiRole === 'Duke' || aiRole === 'LoyalDexter') {
+             card = 'approve';
+        }
+
+        await this.submitMissionCard(card);
+    }
+
+    async submitMissionCard(card: 'approve' | 'request'): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = this.authService.userId();
+
+        if (!gameId || !game || !currentUserId) {
+            throw new Error("Game or user not available.");
+        }
+
+        // 1. Check if the current game status is 'mission' and if the current user is on the mission team.\n
+        if (game.status !== 'mission' || !game.mission?.team.includes(currentUserId)) {
+            throw new Error("Not on a mission or game not in mission phase.");
+        }
+
+        // Prevent playing multiple cards
+        if (game.mission.cardsPlayed?.[currentUserId]) {
+             console.log("User already played a card for this mission.");
+             return; // Or throw an error if preferred
+        }
+
+        // 3. Record the current user's card\n
+        const updatedCardsPlayed = { ...game.mission?.cardsPlayed, [currentUserId]: card };
+        
+        await this.firestoreService.updateDocument('games', gameId, { 'mission.cardsPlayed': updatedCardsPlayed }, true);
+    }
+
+    async nextRound(): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+
+        if (!gameId || !game || game.status !== 'results' || game.winner) {
+            // Only proceed if in results phase and game is not over
+            return;
+        }
+
+        const currentStoryNum = (game.currentStoryNum ?? 0) + 1;
+        const totalStories = game.storiesTotal ?? 5;
+
+        if (currentStoryNum > totalStories) {
+            // Handle end of game if all stories are played
+            // This might involve the assassination phase or declaring a winner based on mission results
+            let winner: 'dexter' | 'sinister' | undefined = undefined;
+            const dexterWins = game.storyResults?.filter(r => r === 'dexter').length ?? 0;
+            const sinisterWins = game.storyResults?.filter(r => r === 'sinister').length ?? 0;
+
+            if (dexterWins > sinisterWins) {
+                // Dexter wins unless there's an assassination phase
+                // TODO: Implement assassination phase logic if applicable
+                winner = 'dexter';
+            } else if (sinisterWins >= dexterWins) {
+                 // Sinister wins if they have more or equal failed missions
+                 winner = 'sinister';
+            }
+
+            await this.firestoreService.updateDocument(
+                'games',
+                gameId,
+                {
+                    status: 'gameOver',
+                    winner: winner,
+                    gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: `All stories played. Game over! ${winner ? winner.toUpperCase() + ' wins!' : ''}` }],
+                },
+                true
+            );
+
+        } else {
+            // Move to the next round
+            const playerIds = game.playerOrder || [];
+            const currentTOIndex = playerIds.indexOf(game.currentTO_id!);
+            const nextTOIndex = (currentTOIndex + 1) % playerIds.length;
+            const nextTOId = playerIds[nextTOIndex];
+
+            await this.firestoreService.updateDocument(
+                'games',
+                gameId,
+                {
+                    currentStoryNum: currentStoryNum,
+                    currentTO_id: nextTOId,
+                    voteFailsThisRound: 0,
+                    teamVote: null, // Clear previous team vote data
+                    mission: null, // Clear previous mission data
+                    status: 'teamProposal', // Start the next round with team proposal
+                    gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: `Starting User Story #${currentStoryNum}. ${game.players[nextTOId]?.name || 'Next Team Leader'} is the Team Leader.` }],
+                },
+                true
+            );
+        }
+    }
+
 }

@@ -1,1 +1,7 @@
 /* You can add global styles to this file, and also import other style files */
+
+/* Highlight players who have not voted */
+.not-voted {
+  color: #f87171; /* light red */
+  font-weight: bold;
+}

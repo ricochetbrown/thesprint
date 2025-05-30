@@ -38,7 +38,17 @@ export class GameService {
                         // Check if the current player is an AI and is the current TO for team proposal
                         const isAICheckProposal = currentUserId && gameId && currentUserId.startsWith(gameId + '-AI-'); // Check if the gameId is part of the AI ID
 
+                        console.log("AI Team Proposal Check:", {
+                            isAI: isAICheckProposal,
+                            isCurrentTO: game?.currentTO_id === currentUserId,
+                            gameStatus: game?.status,
+                            hasTeamVote: !!game?.teamVote,
+                            currentUserId,
+                            currentTO_id: game?.currentTO_id
+                        });
+
                         if (game && currentUserId && isAICheckProposal && game.currentTO_id === currentUserId && game.status === 'teamProposal' && !game.teamVote) {
+                            console.log("AI will propose a team now");
                             this.aiProposeTeam();
                         }
 
@@ -260,10 +270,12 @@ export class GameService {
         return assignedRoles;
     }
 
-    async proposeTeam(team: Player[]): Promise<void> {
+    async proposeTeam(team: Player[], overrideUserId?: string): Promise<void> {
         const gameId = this.activeGameId();
         const game = this.currentGame();
-        const currentUserId = this.authService.userId();
+        const currentUserId = overrideUserId || this.authService.userId();
+
+        console.log("proposeTeam called with", { team, overrideUserId, currentUserId });
 
         if (!gameId || !game || !currentUserId) {
             throw new Error("Game or user not available.");
@@ -271,6 +283,7 @@ export class GameService {
 
         // 1. Check if the current user is the current Team Leader (TO).
         if (game.currentTO_id !== currentUserId) {
+            console.error("proposeTeam: User is not the current TO", { currentUserId, currentTO_id: game.currentTO_id });
             throw new Error("Only the current Team Leader can propose a team.");
         }
 
@@ -321,20 +334,24 @@ export class GameService {
     }
 
     async aiProposeTeam(): Promise<void> {
+        console.log("aiProposeTeam called");
         const gameId = this.activeGameId();
         const game = this.currentGame();
 
         if (!gameId || !game) {
+            console.log("aiProposeTeam: No active game");
             return; // No active game
         }
 
         const currentUserId = game.currentTO_id;
         const currentPlayer = game.players[currentUserId!];
+        console.log("aiProposeTeam: Current TO", { currentUserId, currentPlayer });
 
         // Check if the current player is an AI and is the current TO
         // You'll need a way to identify AI players (e.g., based on their ID format)
         const isAI = currentUserId!.startsWith(gameId + '-AI-'); // Example AI ID check
         if (!isAI || game.currentTO_id !== currentUserId) {
+            console.log("aiProposeTeam: Not an AI TO", { isAI, currentTO_id: game.currentTO_id, currentUserId });
             return; // Not an AI TO
         }
 
@@ -343,9 +360,15 @@ export class GameService {
         const allPlayers = Object.values(game.players);
         const shuffledPlayers = allPlayers.sort(() => 0.5 - Math.random()); // Shuffle players
         const proposedTeam = shuffledPlayers.slice(0, requiredTeamSize); // Select the first 'requiredTeamSize' players
+        console.log("aiProposeTeam: Selected team", { requiredTeamSize, proposedTeam });
 
-        // Call the proposeTeam() method with the randomly selected team
-        await this.proposeTeam(proposedTeam);
+        try {
+            // Call the proposeTeam() method with the randomly selected team and the AI's user ID
+            await this.proposeTeam(proposedTeam, currentUserId);
+            console.log("aiProposeTeam: Team proposed successfully");
+        } catch (error) {
+            console.error("aiProposeTeam: Error proposing team", error);
+        }
     }
 
     async submitVote(vote: 'agree' | 'rethrow'): Promise<void> {

@@ -36,23 +36,23 @@ export class GameService {
                         const game = gameData; // Use the updated game data
 
                         // Check if the current player is an AI and is the current TO for team proposal
-                        const isAICheckProposal = currentUserId && game?.id && currentUserId.startsWith(game.id + '-AI-'); // Check if the gameId is part of the AI ID
+                        const isAICheckProposal = currentUserId && gameId && currentUserId.startsWith(gameId + '-AI-'); // Check if the gameId is part of the AI ID
 
                         if (game && currentUserId && isAICheckProposal && game.currentTO_id === currentUserId && game.status === 'teamProposal' && !game.teamVote) {
                             this.aiProposeTeam();
                         }
 
                         // Check if the current player is an AI and needs to play a mission card
-                        const isAICheckMission = currentUserId && game?.id && currentUserId.startsWith(game.id + '-AI-'); // Check if the gameId is part of the AI ID
+                        const isAICheckMission = currentUserId && gameId && currentUserId.startsWith(gameId + '-AI-'); // Check if the gameId is part of the AI ID
 
                         if (game && currentUserId && isAICheckMission && game.status === 'mission' && game.mission?.team?.includes(currentUserId) && !game.mission?.cardsPlayed?.[currentUserId]) {
                             this.aiSubmitMissionCard();
                         }
 
                         // Check if the current player is an AI and needs to vote
-                         const isAICheck = currentUserId && game?.id?.startsWith(game.id + '-AI-'); // Check if the gameId is part of the AI ID
+                        const isAICheck = currentUserId && gameId && currentUserId.startsWith(gameId + '-AI-'); // Check if the gameId is part of the AI ID
                         if (game && currentUserId && isAICheck && game.status === 'teamVoting' && !game.teamVote?.votes?.[currentUserId]) {
-                             this.aiSubmitVote();
+                            this.aiSubmitVote();
                         }
                     },
                     true

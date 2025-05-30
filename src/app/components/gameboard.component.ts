@@ -1,5 +1,5 @@
 import { Component, computed, inject } from "@angular/core";
-import { Game, Player } from "../interfaces/game.interface";
+import { Game } from "../interfaces/game.interface";
 import { AuthService } from "../services/auth.service";
 import { GameService } from "../services/game.service";
 import { CommonModule } from "@angular/common";
@@ -60,10 +60,10 @@ import { FormsModule } from "@angular/forms";
                             Rethrows: <span class="font-bold">{{ game.voteFailsThisRound || 0 }}</span> / 5
                         </div>
                     </div>
-                    
+
                     <div class="bg-slate-700 bg-opacity-90 p-4 md:p-6 rounded-lg shadow-xl min-h-[200px] md:min-h-[300px] flex flex-col items-center justify-center">
                         <h2 class="text-2xl font-semibold mb-4">{{ getPhaseTitle(game.status) }}</h2>
-                        
+
                         @switch (game.status) {
                             @case ('teamProposal') {
                                 <div>
@@ -90,9 +90,7 @@ import { FormsModule } from "@angular/forms";
                                             Waiting for {{ game.players[game.currentTO_id!].name }} (TO) to propose a team.
                                         </p>
                                     }
-                                    @if (authService.userId() === game.currentTO_id) {
-                                        <button (click)="proposeTeam()" class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded">Propose Team</button>
-                                    }
+                                    <!-- Removed duplicate Propose Team button -->
                                 </div>
                             }
                             @case ('teamVoting') {
@@ -104,14 +102,14 @@ import { FormsModule } from "@angular/forms";
                                         @for (playerId of game.playerOrder; track playerId) {
                                             <span [ngClass]="{'font-bold': game.teamVote?.votes?.[playerId] === undefined}">
                                                 {{ game.players[playerId]?.name }}
-                                                @if (!$last){ 
-                                                    ', ' 
+                                                @if (!$last){
+                                                    ', '
                                                 }
                                             </span>
                                         }
 
                                         <p class="mb-2">
-                                            Votes Cast: {{ game.teamVote?.votes ? Object.keys(game.teamVote.votes).length : 0 }} / {{ game.playerOrder.length }}
+                                            Votes Cast: {{ teamVoteCount() }} / {{ game.playerOrder.length }}
                                         </p>
 
                                         <p class="mb-4">Vote to AGREE or RETHROW.</p>
@@ -150,10 +148,7 @@ import { FormsModule } from "@angular/forms";
                                             </button>
                                         </div>
                                         <p class="mt-4 text-sm">
-                                            Cards Played: {{ game.mission?.cardsPlayed ? Object.keys(game.mission?.cardsPlayed).length : 0 }} / {{ game.mission?.team?.length }}
-                                                    [disabled]="!!game.mission?.cardsPlayed?.[authService.userId()!]"
-                                                    class="bg-red-600 p-4 rounded w-24 h-32 disabled:opacity-50 disabled:cursor-not-allowed">
-                                                REQUEST
+                                            Cards Played: {{ missionCardsPlayedCount() }} / {{ game.mission?.team?.length }}
                                         </p>
                                     } @else {
                                         <p class="mb-4">Waiting for mission results...</p>
@@ -220,11 +215,27 @@ export class GameBoardComponent {
         return 'Unknown';
     });
 
+    teamVoteCount = computed(() => {
+        const game = this.gameService.currentGame();
+        if (game?.teamVote?.votes) {
+            return Object.keys(game.teamVote.votes).length;
+        }
+        return 0;
+    });
+
+    missionCardsPlayedCount = computed(() => {
+        const game = this.gameService.currentGame();
+        if (game?.mission?.cardsPlayed) {
+            return Object.keys(game.mission.cardsPlayed).length;
+        }
+        return 0;
+    });
+
     getPlayerColor(playerId: string): string {
         let hash = 0;
         for (let i = 0; i < playerId.length; i++) {
             hash = playerId.charCodeAt(i) + ((hash << 5) - hash);
-            hash = hash & hash; 
+            hash = hash & hash;
         }
         const color = Math.abs(hash).toString(16).substring(0, 6);
         return "000000".substring(0, 6 - color.length) + color;
@@ -265,7 +276,7 @@ export class GameBoardComponent {
         };
         return (teamSizes[playerCount] && teamSizes[playerCount][storyNum - 1]) || 2;
     }
-    
+
     getProposedTeamNames(game: Game): string {
         if (!game.teamVote?.proposedTeam) return 'N/A';
         return game.teamVote.proposedTeam.map(id => game.players[id]?.name || 'Unknown').join(', ');
@@ -275,7 +286,7 @@ export class GameBoardComponent {
         if (!game.mission?.team) return 'N/A';
         return game.mission.team.map(id => game.players[id]?.name || 'Unknown').join(', ');
     }
-    
+
     isPlayerOnMission(game: Game): boolean {
         const myId = this.authService.userId();
         return !!(myId && game.mission?.team?.includes(myId));
@@ -289,9 +300,29 @@ export class GameBoardComponent {
         return "Your objective will be revealed.";
     }
 
-    proposeTeam(): void {
+    proposeTeam(game: Game): void {
         console.log("Propose Team clicked");
-        this.gameService.proposeTeam();
+        // Convert selectedPlayers IDs to Player objects
+        const selectedTeam = this.selectedPlayers.map(playerId => game.players[playerId]);
+        this.gameService.proposeTeam(selectedTeam);
+    }
+
+    togglePlayerSelection(playerId: string, game: Game): void {
+        const numToSelect = this.getNumToSelect(game);
+
+        // If player is already selected, remove them
+        if (this.selectedPlayers.includes(playerId)) {
+            this.selectedPlayers = this.selectedPlayers.filter(id => id !== playerId);
+        }
+        // If player is not selected and we haven't reached the limit, add them
+        else if (this.selectedPlayers.length < numToSelect) {
+            this.selectedPlayers.push(playerId);
+        }
+        // If we've reached the limit, replace the first selected player
+        else {
+            this.selectedPlayers.shift(); // Remove the first player
+            this.selectedPlayers.push(playerId); // Add the new player
+        }
     }
 
     nextRound(): void {

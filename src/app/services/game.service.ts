@@ -509,35 +509,43 @@ export class GameService {
 
         console.log(`AI ${aiPlayerId} (${aiRole}) voting: ${vote}`);
 
-        // Use the standard submitVote method to ensure consistent vote processing
-        // We need to temporarily override the current user ID
-        const originalUserId = this.authService.userId();
+        // Record the vote directly in Firebase without using submitVote
+        // This avoids the need to temporarily override the current user ID
+        if (!game.teamVote) {
+            console.error(`No teamVote object found for game ${gameId}`);
+            return;
+        }
+
+        const updatedVotes = {
+            ...(game.teamVote.votes || {}),
+            [aiPlayerId]: vote
+        };
+
+        const gameLogEntry = {
+            timestamp: new Date(),
+            message: `${game.players[aiPlayerId]?.name || 'AI Player'} voted to ${vote} the team.`
+        };
 
         try {
-            // Temporarily set the authService userId to the AI player ID
-            // This is a hack, but it allows us to use the submitVote method
-            (this.authService as any)._userId = aiPlayerId;
+            await this.firestoreService.updateDocument('games', gameId, {
+                teamVote: {
+                    ...game.teamVote,
+                    votes: updatedVotes
+                },
+                gameLog: [...(game.gameLog || []), gameLogEntry]
+            }, true);
 
-            // Call the standard submitVote method
-            await this.submitVote(vote);
+            console.log(`AI ${aiPlayerId} vote recorded successfully`);
+
+            // Check if all players have voted after this AI vote
+            this.checkIfAllVoted(game, updatedVotes);
         } catch (error) {
             console.error(`Error when AI ${aiPlayerId} tried to vote:`, error);
-        } finally {
-            // Restore the original user ID
-            (this.authService as any)._userId = originalUserId;
         }
     }
 
-    // Keep the original method for backward compatibility
-    async aiSubmitVote(): Promise<void> {
-        const currentUserId = this.authService.userId();
-        if (currentUserId) {
-            await this.aiSubmitVoteForPlayer(currentUserId);
-        }
-    }
-
-    // Helper method to check if all players have voted and process the results
-    private async checkAllVoted(game: Game, updatedVotes: {[playerId: string]: 'agree' | 'rethrow'}): Promise<void> {
+    // Helper method to check if all players have voted after an AI vote
+    private async checkIfAllVoted(game: Game, updatedVotes: {[playerId: string]: 'agree' | 'rethrow'}): Promise<void> {
         const gameId = this.activeGameId();
         if (!gameId || !game) return;
 
@@ -586,6 +594,23 @@ export class GameService {
             }, true);
         }
     }
+
+    // Keep the original method for backward compatibility
+    async aiSubmitVote(): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = this.authService.userId();
+
+        if (!gameId || !game || !currentUserId) {
+            return; // No active game or user
+        }
+
+        // Check if the current user is an AI and needs to vote
+        if (currentUserId.startsWith(gameId + '-AI-') && game.status === 'teamVoting' && !game.teamVote?.votes?.[currentUserId]) {
+            await this.aiSubmitVoteForPlayer(currentUserId);
+        }
+    }
+
 
     async aiSubmitMissionCard(): Promise<void> {
         const gameId = this.activeGameId();

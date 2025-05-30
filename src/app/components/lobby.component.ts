@@ -116,9 +116,11 @@ export class LobbyComponent {
 
     async fillWithAIPlayers() {
         const game = this.gameService.currentGame();
-        if (game) {
+        console.log('Game object:', game);
+        if (game && game.id) {
             const playersNeeded = game.settings.maxPlayers - this.objectKeys(game.players).length;
             if (playersNeeded > 0) {
+                console.log('Game ID:', game.id);
                 await this.gameService.addAIPlayers(game.id, playersNeeded);
             }
         }

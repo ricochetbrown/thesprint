@@ -91,7 +91,7 @@ export class FirestoreService {
         }
         const docRef = doc(this.db, path, docId);
         return onSnapshot(docRef, (docSnap) => {
-            callback(docSnap.exists() ? docSnap.data() as T : null);
+            callback(docSnap.exists() ? ({ id: docSnap.id, ...docSnap.data() } as T) : null);
         }, (error) => {
             console.error(`Error listening to document ${path}/${docId}:`, error);
             callback(null); // Notify listener of error or non-existence

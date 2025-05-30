@@ -160,11 +160,12 @@ export class GameService {
             currentTO_id: firstTO,
             currentStoryNum: 1,
             roles: roles, // Store assigned roles
-            gameLog: [...(game.gameLog || []), { timestamp: serverTimestamp(), message: "Game started by host." }]
+            gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: "Game started by host." }]
         }, true);
     }
 
     async addAIPlayers(gameId: string, numAI: number): Promise<void> {
+        console.log('Received gameId:', gameId);
         if (!gameId || typeof gameId !== 'string') {
             throw new Error("Invalid game ID provided for adding AI players.");
         }
@@ -233,7 +234,4 @@ export class GameService {
         console.log("Assigned roles:", assignedRoles);
         return assignedRoles;
     }
-    
-    // TODO: Add methods for game actions: proposeTeam, submitTeamVote, playMissionCard, snipeDuke, etc.
-    // These methods will update the game document in Firestore.
 }

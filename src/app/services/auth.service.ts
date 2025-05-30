@@ -48,8 +48,6 @@ export class AuthService {
                     console.log("Auth state changed. User:", user);
                 });
 
-                this.signIn();
-
             } catch (error) {
                 console.error("Error initializing Firebase Auth:", error);
                 this.isAuthReady.set(true); // Still set to true to allow app to proceed (perhaps with limited functionality)
@@ -111,7 +109,7 @@ export class AuthService {
             await signOut(this.auth);
             // After signing out, onAuthStateChanged will trigger and set currentUser to null.
             // Forcing an anonymous sign-in again to maintain a userId if needed for app functionality.
-            await this.signIn();
+            // Removed automatic anonymous sign-in on logout per user request
         } catch (error) {
             console.error("Logout error:", error);
         }

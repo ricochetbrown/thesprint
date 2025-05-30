@@ -142,8 +142,8 @@ export class GameService {
         if (!gameId || !game || game.hostId !== currentUserId) {
             throw new Error("Only the host can start the game.");
         }
-        if (Object.keys(game.players).length < 5) { // Example minimum players
-            throw new Error("Not enough players to start (min 5).");
+        if (Object.keys(game.players).length < 5 || Object.keys(game.players).length > 12) { 
+            throw new Error("Invalid number of players (must be between 5 and 12).");
         }
         if (game.status !== 'lobby') {
             throw new Error("Game already started or not in lobby.");
@@ -170,20 +170,40 @@ export class GameService {
         const numPlayers = playerIds.length;
         const assignedRoles: { [playerId: string]: string } = {};
         let rolesToAssign: string[] = [];
+        let numLoyalDexter = 0;
+        let numSinisterSpy = 0;
 
-        // Example for 5 players (adjust based on manual)
-        if (numPlayers === 5) {
-            rolesToAssign = ['Duke', 'LoyalDexter', 'LoyalDexter', 'Sniper', 'SinisterSpy'];
-        } else if (numPlayers === 7) {
-            rolesToAssign = ['Duke', 'LoyalDexter', 'LoyalDexter', 'LoyalDexter', 'Sniper', 'SinisterSpy', 'SinisterSpy'];
-        } else { // Default for other counts (needs proper logic)
-             rolesToAssign = playerIds.map((_, i) => i < Math.ceil(numPlayers * 0.6) ? 'LoyalDexter' : 'SinisterSpy');
-             if (rolesToAssign.includes('LoyalDexter')) rolesToAssign[0] = 'Duke'; // Ensure Duke
-             if (rolesToAssign.includes('SinisterSpy')) rolesToAssign[rolesToAssign.length-1] = 'Sniper'; // Ensure Sniper
+        // Determine number of Loyal Dexters and Sinister Spies based on total players
+        // (This is a common distribution pattern, adjust based on actual game rules)
+        if (numPlayers >= 5 && numPlayers <= 6) {
+            numLoyalDexter = 3;
+            numSinisterSpy = numPlayers - numLoyalDexter;
+        } else if (numPlayers >= 7 && numPlayers <= 8) {
+            numLoyalDexter = 4;
+            numSinisterSpy = numPlayers - numLoyalDexter;
+        } else if (numPlayers >= 9 && numPlayers <= 10) {
+            numLoyalDexter = 5;
+            numSinisterSpy = numPlayers - numLoyalDexter;
+        } else if (numPlayers >= 11 && numPlayers <= 12) {
+            numLoyalDexter = 6;
+            numSinisterSpy = numPlayers - numLoyalDexter;
         }
         
+        // Ensure at least one Duke, one Sniper, one Sinister Spy
+        // (Duke is one of the Loyal Dexters, Sniper is one of the Sinister Spies)
+        rolesToAssign.push('Duke'); // One Duke from Loyal Dexters
+        for (let i = 0; i < numLoyalDexter - 1; i++) {
+            rolesToAssign.push('LoyalDexter');
+        }
+
+        rolesToAssign.push('Sniper'); // One Sniper from Sinister Spies
+        for (let i = 0; i < numSinisterSpy - 1; i++) {
+            rolesToAssign.push('SinisterSpy');
+        }
+
         // Shuffle roles and assign
         rolesToAssign.sort(() => Math.random() - 0.5); 
+        
         playerIds.forEach((id, index) => {
             assignedRoles[id] = rolesToAssign[index];
         });

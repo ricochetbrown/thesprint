@@ -59,8 +59,8 @@ import { FormsModule } from "@angular/forms";
                         <div class="mt-6 text-center">
                             @if (authService.userId() === game.hostId) {
                                 <button (click)="handleStartGame()"
-                                        [disabled]="objectKeys(game.players).length < 5" 
-                                        class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-lg text-xl disabled:opacity-50 disabled:cursor-not-allowed">
+                                        [disabled]="objectKeys(game.players).length < 5 || objectKeys(game.players).length > 12" 
+                                        class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-lg text-xl disabled:opacity-50 disabled:cursor-not-allowed" [class.bg-red-500]="objectKeys(game.players).length > 12">
                                     {{ objectKeys(game.players).length < 5 ? 'Need Min 5 Players' : 'Start Game' }}
                                 </button>
                             } @else {

@@ -26,8 +26,8 @@ export class GameService {
             if (gameId) {
                  // Games are public
                 this.gameUnsubscribe = this.firestoreService.listenToDocument<Game>(
-                    'games', 
-                    gameId, 
+                    'games',
+                    gameId,
                     (gameData) => {
                         this.currentGame.set(gameData);
                         console.log("Game data updated:", gameData);
@@ -55,7 +55,7 @@ export class GameService {
                              this.aiSubmitVote();
                         }
                     },
-                    true 
+                    true
                 );
             } else {
                 this.currentGame.set(null);
@@ -88,7 +88,7 @@ export class GameService {
             storyResults: Array(5).fill(null),
             voteFailsThisRound: 0,
         };
-        
+
         // Games are stored in a public collection
         const gameId = await this.firestoreService.createDocument<Omit<Game, 'id' | 'createdAt' | 'updatedAt'>>('games', gameData, undefined, true);
         this.activeGameId.set(gameId);
@@ -146,14 +146,14 @@ export class GameService {
                 newHostId = newPlayerOrder[0]; // Assign new host
                 game.players[newHostId].isHost = true;
             }
-            await this.firestoreService.updateDocument('games', gameId, { 
-                players: game.players, 
+            await this.firestoreService.updateDocument('games', gameId, {
+                players: game.players,
                 playerOrder: newPlayerOrder,
                 hostId: newHostId,
                 hostName: newHostId ? game.players[newHostId]?.name : undefined
             }, true);
         }
-        
+
         this.activeGameId.set(null);
     }
 
@@ -165,7 +165,7 @@ export class GameService {
         if (!gameId || !game || game.hostId !== currentUserId) {
             throw new Error("Only the host can start the game.");
         }
-        if (Object.keys(game.players).length < 5 || Object.keys(game.players).length > 12) { 
+        if (Object.keys(game.players).length < 5 || Object.keys(game.players).length > 12) {
             throw new Error("Invalid number of players (must be between 5 and 12).");
         }
         if (game.status !== 'lobby') {
@@ -176,10 +176,12 @@ export class GameService {
         // For now, just set status to 'starting' (which could trigger role assignment)
         // and then to 'teamProposal' with the first TO.
         const roles = this.assignRoles(game.playerOrder);
-        const firstTO = game.playerOrder[0]; // Simplistic: first player is TO
+        // Randomly select a player to be the first TO
+        const randomIndex = Math.floor(Math.random() * game.playerOrder.length);
+        const firstTO = game.playerOrder[randomIndex];
 
-        await this.firestoreService.updateDocument('games', gameId, { 
-            status: 'teamProposal', 
+        await this.firestoreService.updateDocument('games', gameId, {
+            status: 'teamProposal',
             currentTO_id: firstTO,
             currentStoryNum: 1,
             roles: roles, // Store assigned roles
@@ -235,7 +237,7 @@ export class GameService {
             numLoyalDexter = 6;
             numSinisterSpy = numPlayers - numLoyalDexter;
         }
-        
+
         // Ensure at least one Duke, one Sniper, one Sinister Spy
         // (Duke is one of the Loyal Dexters, Sniper is one of the Sinister Spies)
         rolesToAssign.push('Duke'); // One Duke from Loyal Dexters
@@ -249,8 +251,8 @@ export class GameService {
         }
 
         // Shuffle roles and assign
-        rolesToAssign.sort(() => Math.random() - 0.5); 
-        
+        rolesToAssign.sort(() => Math.random() - 0.5);
+
         playerIds.forEach((id, index) => {
             assignedRoles[id] = rolesToAssign[index];
         });
@@ -501,7 +503,7 @@ export class GameService {
 
         // 3. Record the current user's card\n
         const updatedCardsPlayed = { ...game.mission?.cardsPlayed, [currentUserId]: card };
-        
+
         await this.firestoreService.updateDocument('games', gameId, { 'mission.cardsPlayed': updatedCardsPlayed }, true);
     }
 

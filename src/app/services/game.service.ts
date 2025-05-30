@@ -35,19 +35,19 @@ export class GameService {
                         const currentUserId = this.authService.userId(); // Get current user ID inside the listener
                         const game = gameData; // Use the updated game data
 
-                        // Check if the current player is an AI and is the current TO for team proposal
-                        const isAICheckProposal = currentUserId && gameId && currentUserId.startsWith(gameId + '-AI-'); // Check if the gameId is part of the AI ID
+                        // Check if the current TO is an AI
+                        const currentTOId = game?.currentTO_id;
+                        const isCurrentTOAnAI = currentTOId && gameId && currentTOId.startsWith(gameId + '-AI-'); // Check if the gameId is part of the AI ID
 
                         console.log("AI Team Proposal Check:", {
-                            isAI: isAICheckProposal,
-                            isCurrentTO: game?.currentTO_id === currentUserId,
+                            isCurrentTOAnAI,
+                            currentTOId,
                             gameStatus: game?.status,
                             hasTeamVote: !!game?.teamVote,
-                            currentUserId,
-                            currentTO_id: game?.currentTO_id
+                            currentUserId
                         });
 
-                        if (game && currentUserId && isAICheckProposal && game.currentTO_id === currentUserId && game.status === 'teamProposal' && !game.teamVote) {
+                        if (game && currentTOId && isCurrentTOAnAI && game.status === 'teamProposal' && !game.teamVote) {
                             console.log("AI will propose a team now");
                             this.aiProposeTeam();
                         }

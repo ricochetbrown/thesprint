@@ -164,6 +164,29 @@ export class GameService {
         }, true);
     }
 
+    async addAIPlayers(gameId: string, numAI: number): Promise<void> {
+        if (!gameId || typeof gameId !== 'string') {
+            throw new Error("Invalid game ID provided for adding AI players.");
+        }
+        const game = await this.firestoreService.getDocument<Game>('games', gameId, true);
+        if (!game) throw new Error("Game not found.");
+
+        const currentPlayers = Object.keys(game.players).length;
+        if (currentPlayers + numAI > game.settings.maxPlayers) {
+            throw new Error(`Cannot add ${numAI} AI players. Game only needs ${game.settings.maxPlayers - currentPlayers} more players.`);
+        }
+
+        const updatedPlayers = { ...game.players };
+        const updatedPlayerOrder = [...game.playerOrder];
+
+        for (let i = 1; i <= numAI; i++) {
+            const aiPlayerId = `${gameId}-AI-${Date.now()}-${i}`; // Simple unique ID
+            updatedPlayers[aiPlayerId] = { id: aiPlayerId, name: `AI Player ${currentPlayers + i}`, isHost: false };
+            updatedPlayerOrder.push(aiPlayerId);
+        }
+        await this.firestoreService.updateDocument('games', gameId, { players: updatedPlayers, playerOrder: updatedPlayerOrder }, true);
+    }
+
     private assignRoles(playerIds: string[]): { [playerId: string]: string } {
         // This is a placeholder. Implement actual role assignment based on player count
         // from "manual (1).pdf". E.g., 5 players: 3 Dexter (1 Duke), 2 Sinister (1 Sniper).

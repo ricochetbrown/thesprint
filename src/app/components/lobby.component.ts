@@ -58,6 +58,14 @@ import { FormsModule } from "@angular/forms";
 
                         <div class="mt-6 text-center">
                             @if (authService.userId() === game.hostId) {
+                                @if (objectKeys(game.players).length < game.settings.maxPlayers) {
+                                <button (click)="fillWithAIPlayers()"
+                                        [disabled]="objectKeys(game.players).length >= game.settings.maxPlayers"
+                                        class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg text-xl disabled:opacity-50 disabled:cursor-not-allowed mr-4">
+                                    Fill with AI
+                                </button>
+                                }
+
                                 <button (click)="handleStartGame()"
                                         [disabled]="objectKeys(game.players).length < 5 || objectKeys(game.players).length > 12" 
                                         class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-lg text-xl disabled:opacity-50 disabled:cursor-not-allowed" [class.bg-red-500]="objectKeys(game.players).length > 12">
@@ -103,6 +111,16 @@ export class LobbyComponent {
         } catch (error: any) {
             this.startGameError.set(error.message || "Failed to start game.");
             console.error("Start game error:", error);
+        }
+    }
+
+    async fillWithAIPlayers() {
+        const game = this.gameService.currentGame();
+        if (game) {
+            const playersNeeded = game.settings.maxPlayers - this.objectKeys(game.players).length;
+            if (playersNeeded > 0) {
+                await this.gameService.addAIPlayers(game.id, playersNeeded);
+            }
         }
     }
 }

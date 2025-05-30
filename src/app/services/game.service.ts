@@ -59,10 +59,17 @@ export class GameService {
                             this.aiSubmitMissionCard();
                         }
 
-                        // Check if the current player is an AI and needs to vote
-                        const isAICheck = currentUserId && gameId && currentUserId.startsWith(gameId + '-AI-'); // Check if the gameId is part of the AI ID
-                        if (game && currentUserId && isAICheck && game.status === 'teamVoting' && !game.teamVote?.votes?.[currentUserId]) {
-                            this.aiSubmitVote();
+                        // Check if any AI players need to vote
+                        if (game && gameId && game.status === 'teamVoting') {
+                            // Find all AI players who haven't voted yet
+                            const aiPlayers = game.playerOrder.filter(playerId =>
+                                playerId.startsWith(gameId + '-AI-') && !game.teamVote?.votes?.[playerId]
+                            );
+
+                            // Make each AI player vote
+                            for (const aiPlayerId of aiPlayers) {
+                                this.aiSubmitVoteForPlayer(aiPlayerId);
+                            }
                         }
                     },
                     true
@@ -451,25 +458,133 @@ export class GameService {
         }
     }
 
-    async aiSubmitVote(): Promise<void> {
+    async aiSubmitVoteForPlayer(aiPlayerId: string): Promise<void> {
         const gameId = this.activeGameId();
         const game = this.currentGame();
-        const currentUserId = this.authService.userId(); // Get current user ID inside the async function
 
-        if (!gameId || !game || !currentUserId) {
-            return; // No active game or user
+        if (!gameId || !game) {
+            return; // No active game
         }
 
-        // Check if the current player is an AI, is the current TO, and needs to vote
-        const isAI = currentUserId.startsWith(gameId + '-AI-'); // Example AI ID check
-        if (!isAI || game.status !== 'teamVoting' || game.teamVote?.votes?.[currentUserId]) {
+        // Check if the player is an AI and needs to vote
+        if (!aiPlayerId.startsWith(gameId + '-AI-') || game.status !== 'teamVoting' || game.teamVote?.votes?.[aiPlayerId]) {
             return; // Not an AI or already voted or not in voting phase
         }
 
-        // Determine the vote: 'agree' if 5th rethrow (index 4), otherwise random
-        const vote: 'agree' | 'rethrow' = (game.voteFailsThisRound ?? 0) === 4 ? 'agree' : (Math.random() > 0.5 ? 'agree' : 'rethrow');
+        // Determine the vote based on AI role
+        const aiRole = game.roles?.[aiPlayerId];
+        let vote: 'agree' | 'rethrow';
 
-        await this.submitVote(vote);
+        // Always agree on the 5th vote failure to prevent automatic Sinister win
+        if ((game.voteFailsThisRound ?? 0) === 4) {
+            vote = 'agree';
+        }
+        // Loyal Dexter and Duke should generally agree to proposed teams
+        else if (aiRole === 'LoyalDexter' || aiRole === 'Duke') {
+            // 80% chance to agree for Loyal Dexter roles
+            vote = Math.random() < 0.8 ? 'agree' : 'rethrow';
+        }
+        // Sinister roles should be more likely to rethrow, especially if the team has few Sinister players
+        else if (aiRole === 'SinisterSpy' || aiRole === 'Sniper') {
+            // Check if the proposed team has Sinister players
+            const proposedTeam = game.teamVote?.proposedTeam || [];
+            const sinisterOnTeam = proposedTeam.filter(playerId => {
+                const playerRole = game.roles?.[playerId];
+                return playerRole === 'SinisterSpy' || playerRole === 'Sniper';
+            }).length;
+
+            // If no Sinister on team, high chance to rethrow
+            if (sinisterOnTeam === 0) {
+                vote = Math.random() < 0.8 ? 'rethrow' : 'agree';
+            }
+            // If at least one Sinister on team, more likely to agree
+            else {
+                vote = Math.random() < 0.6 ? 'agree' : 'rethrow';
+            }
+        }
+        // Default random vote for unknown roles
+        else {
+            vote = Math.random() > 0.5 ? 'agree' : 'rethrow';
+        }
+
+        console.log(`AI ${aiPlayerId} (${aiRole}) voting: ${vote}`);
+
+        // Use the standard submitVote method to ensure consistent vote processing
+        // We need to temporarily override the current user ID
+        const originalUserId = this.authService.userId();
+
+        try {
+            // Temporarily set the authService userId to the AI player ID
+            // This is a hack, but it allows us to use the submitVote method
+            (this.authService as any)._userId = aiPlayerId;
+
+            // Call the standard submitVote method
+            await this.submitVote(vote);
+        } catch (error) {
+            console.error(`Error when AI ${aiPlayerId} tried to vote:`, error);
+        } finally {
+            // Restore the original user ID
+            (this.authService as any)._userId = originalUserId;
+        }
+    }
+
+    // Keep the original method for backward compatibility
+    async aiSubmitVote(): Promise<void> {
+        const currentUserId = this.authService.userId();
+        if (currentUserId) {
+            await this.aiSubmitVoteForPlayer(currentUserId);
+        }
+    }
+
+    // Helper method to check if all players have voted and process the results
+    private async checkAllVoted(game: Game, updatedVotes: {[playerId: string]: 'agree' | 'rethrow'}): Promise<void> {
+        const gameId = this.activeGameId();
+        if (!gameId || !game) return;
+
+        const playerIds = game.playerOrder || [];
+        const allVoted = playerIds.every(playerId => updatedVotes.hasOwnProperty(playerId));
+
+        // If all players have voted, process the votes
+        if (allVoted) {
+            const voteCounts = Object.values(updatedVotes).reduce((acc, currentVote) => {
+                acc[currentVote] = (acc[currentVote] || 0) + 1;
+                return acc;
+            }, { agree: 0, rethrow: 0 } as {agree: number, rethrow: number});
+
+            let nextStatus: Game['status'];
+            let nextTOId = game.currentTO_id;
+            let nextVoteFails = game.voteFailsThisRound ?? 0;
+            let additionalLogMessage = '';
+
+            // If 'agree' votes are more than 'rethrow' votes
+            if (voteCounts.agree > voteCounts.rethrow) {
+                nextStatus = 'mission';
+                additionalLogMessage = `Team approved with ${voteCounts.agree} agree votes and ${voteCounts.rethrow} rethrow votes. Starting mission.`;
+                nextVoteFails = 0; // Reset vote fails on successful vote
+            }
+            // If 'rethrow' votes are more than or equal to 'agree' votes
+            else {
+                nextVoteFails++;
+                if (nextVoteFails >= 5) {
+                    nextStatus = 'gameOver'; // Or a specific 'sinisterWins' status
+                    additionalLogMessage = `Team rejected. This was the 5th failed vote. Sinister Spy wins!`;
+                } else {
+                    nextStatus = 'teamProposal';
+                    const currentTOIndex = playerIds.indexOf(game.currentTO_id!);
+                    const nextTOIndex = (currentTOIndex + 1) % playerIds.length;
+                    nextTOId = playerIds[nextTOIndex];
+                    additionalLogMessage = `Team rejected with ${voteCounts.rethrow} rethrow votes and ${voteCounts.agree} agree votes. ${game.players[nextTOId]?.name || 'Next Team Leader'} is now the Team Leader.`;
+                }
+            }
+
+            await this.firestoreService.updateDocument('games', gameId, {
+                status: nextStatus,
+                currentTO_id: nextTOId,
+                voteFailsThisRound: nextVoteFails,
+                gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: additionalLogMessage }],
+                teamVote: null, // Clear the team vote data for the next round
+            }, true);
+        }
     }
 
     async aiSubmitMissionCard(): Promise<void> {

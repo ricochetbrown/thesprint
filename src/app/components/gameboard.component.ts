@@ -97,16 +97,22 @@ import { FormsModule } from "@angular/forms";
                                 <div>
                                     <p class="mb-2">Team proposed by {{ game.players[game.currentTO_id!].name }}. Vote:</p>
                                     <div class="mb-4 text-lg">
-                                        <!-- Highlight players who haven't voted -->
-                                        Proposed Team:
-                                        @for (playerId of game.playerOrder; track playerId) {
-                                            <span [ngClass]="{'font-bold': game.teamVote?.votes?.[playerId] === undefined}">
-                                                {{ game.players[playerId]?.name }}
-                                                @if (!$last){
-                                                    ', '
-                                                }
-                                            </span>
-                                        }
+                                        <!-- Display only the proposed team members -->
+                                        Proposed Team: <span class="font-bold">{{ getProposedTeamNames(game) }}</span>
+
+                                        <!-- Display voting status for all players -->
+                                        <div class="mt-2">
+                                            <p>Voting Status:</p>
+                                            @for (playerId of game.playerOrder; track playerId) {
+                                                <span [ngClass]="{'font-bold text-yellow-300': game.teamVote?.votes?.[playerId] === undefined, 'text-green-300': game.teamVote?.votes?.[playerId] === 'agree', 'text-red-300': game.teamVote?.votes?.[playerId] === 'rethrow'}">
+                                                    {{ game.players[playerId]?.name }}:
+                                                    {{ game.teamVote?.votes?.[playerId] ? (game.teamVote?.votes?.[playerId] === 'agree' ? 'Agreed' : 'Rethrow') : 'Not Voted' }}
+                                                    @if (!$last){
+                                                        ', '
+                                                    }
+                                                </span>
+                                            }
+                                        </div>
 
                                         <p class="mb-2">
                                             Votes Cast: {{ teamVoteCount() }} / {{ game.playerOrder.length }}

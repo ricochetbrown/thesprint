@@ -73,7 +73,7 @@ import { FormsModule } from "@angular/forms";
                                         </p>
                                     }
                                     @if (authService.userId() === game.currentTO_id) {
-                                        <button class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded">Propose Team (TODO)</button>
+                                        <button (click)="proposeTeam()" class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded">Propose Team</button>
                                     }
                                 </div>
                             }
@@ -217,5 +217,11 @@ export class GameBoardComponent {
         if (role === 'SinisterSpy') return "Sinister. Cause missions to fail. Can Approve/Request.";
         if (role === 'LoyalDexter') return "Dexter. Help missions succeed. Must Approve.";
         return "Your objective will be revealed.";
+    }
+
+    // --- Action Methods (TODO) ---
+    proposeTeam(): void {
+        console.log("Propose Team clicked");
+        this.gameService.proposeTeam();
     }
 }

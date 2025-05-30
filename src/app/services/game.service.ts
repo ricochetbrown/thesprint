@@ -31,6 +31,15 @@ export class GameService {
                     (gameData) => {
                         this.currentGame.set(gameData);
                         console.log("Game data updated:", gameData);
+
+                        // Check if the current player is an AI and is the current TO
+                        const game = this.currentGame();
+                        const currentUserId = this.authService.userId();
+                        const isAI = currentUserId && gameId.startsWith(gameId + '-AI-'); // Check if the gameId is part of the AI ID
+
+                        if (game && currentUserId && isAI && game.currentTO_id === currentUserId && game.status === 'teamProposal') {
+                            this.aiProposeTeam();
+                        }
                     },
                     true 
                 );
@@ -233,5 +242,93 @@ export class GameService {
         });
         console.log("Assigned roles:", assignedRoles);
         return assignedRoles;
+    }
+
+    async proposeTeam(team: Player[]): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = this.authService.userId();
+
+        if (!gameId || !game || !currentUserId) {
+            throw new Error("Game or user not available.");
+        }
+
+        // 1. Check if the current user is the current Team Leader (TO).
+        if (game.currentTO_id !== currentUserId) {
+            throw new Error("Only the current Team Leader can propose a team.");
+        }
+
+        // 2. Check if the number of proposed players is correct for the current story.
+        const requiredTeamSize = this.getRequiredTeamSize(Object.keys(game.players).length, game.currentStoryNum ?? 1);
+        if (team.length !== requiredTeamSize) {
+            throw new Error(`Incorrect team size. Story ${game.currentStoryNum} requires a team of ${requiredTeamSize} players.`);
+        }
+
+        // 3. Update the game document in Firestore with the proposed team.
+        const teamPlayerIds = team.map(p => p.id);
+        const gameLogEntry = {
+            timestamp: new Date(),
+            message: `${game.players[currentUserId]?.name || 'Team Leader'} proposed a team of ${team.length} for story ${game.currentStoryNum}.`
+        };
+
+        await this.firestoreService.updateDocument('games', gameId, {
+            currentTeam: teamPlayerIds,
+            status: 'teamVote',
+            gameLog: [...(game.gameLog || []), gameLogEntry]
+        }, true);
+    }
+
+    // Helper method to determine required team size based on player count and story number
+    private getRequiredTeamSize(numPlayers: number, storyNum: number): number {
+        // These numbers are based on "The Sprint" manual's player count vs team size table.
+        // Adjust if using different rules or game variants.
+        if (numPlayers < 5 || numPlayers > 12) {
+            throw new Error("Invalid number of players for team size calculation.");
+        }
+
+        const teamSizes: { [key: number]: number[] } = {
+            5: [2, 3, 2, 3, 3], // Stories 1-5
+            6: [2, 3, 4, 3, 4],
+            7: [2, 3, 3, 4, 4], // Usually 4 for story 4 here in some variants, check manual
+            8: [3, 4, 4, 5, 5], // Check manual for exact numbers
+            9: [3, 4, 4, 5, 5], // Check manual for exact numbers
+            10: [3, 4, 4, 5, 5], // Check manual for exact numbers
+            11: [3, 4, 5, 5, 5], // Check manual for exact numbers
+            12: [3, 4, 4, 5, 5], // Check manual for exact numbers
+        };
+
+        // Story numbers are 1-indexed, array indices are 0-indexed
+        if (storyNum < 1 || storyNum > 5 || !teamSizes[numPlayers]) {
+            throw new Error(`Invalid story number (${storyNum}) or player count (${numPlayers}).`);
+        }
+        return teamSizes[numPlayers][storyNum - 1];
+    }
+
+    async aiProposeTeam(): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+
+        if (!gameId || !game) {
+            return; // No active game
+        }
+
+        const currentUserId = game.currentTO_id;
+        const currentPlayer = game.players[currentUserId!];
+
+        // Check if the current player is an AI and is the current TO
+        // You'll need a way to identify AI players (e.g., based on their ID format)
+        const isAI = currentUserId!.startsWith(gameId + '-AI-'); // Example AI ID check
+        if (!isAI || game.currentTO_id !== currentUserId) {
+            return; // Not an AI TO
+        }
+
+        // Randomly select the correct number of players for the current story
+        const requiredTeamSize = this.getRequiredTeamSize(Object.keys(game.players).length, game.currentStoryNum ?? 1);
+        const allPlayers = Object.values(game.players);
+        const shuffledPlayers = allPlayers.sort(() => 0.5 - Math.random()); // Shuffle players
+        const proposedTeam = shuffledPlayers.slice(0, requiredTeamSize); // Select the first 'requiredTeamSize' players
+
+        // Call the proposeTeam() method with the randomly selected team
+        await this.proposeTeam(proposedTeam);
     }
 }

@@ -72,9 +72,9 @@ export class GameService {
                                 playerId.startsWith(gameId + '-AI-') && !game.teamVote?.votes?.[playerId]
                             );
 
-                            // Make each AI player vote
-                            for (const aiPlayerId of aiPlayers) {
-                                this.aiSubmitVoteForPlayer(aiPlayerId);
+                            // If there are AI players who need to vote, handle all votes in a single update
+                            if (aiPlayers.length > 0) {
+                                this.submitAllAIVotes(aiPlayers);
                             }
                         }
                     },
@@ -438,6 +438,20 @@ export class GameService {
                 nextStatus = 'mission';
                 additionalLogMessage = `Team approved with ${voteCounts.agree} agree votes and ${voteCounts.rethrow} rethrow votes. Starting mission.`;
                 nextVoteFails = 0; // Reset vote fails on successful vote
+
+                // Set the mission team to the proposed team that was just approved
+                const missionTeam = game.teamVote?.proposedTeam || [];
+                await this.firestoreService.updateDocument('games', gameId, {
+                    mission: { team: missionTeam, cardsPlayed: {} },
+                    status: nextStatus,
+                    currentTO_id: nextTOId,
+                    voteFailsThisRound: nextVoteFails,
+                    gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: additionalLogMessage }],
+                    teamVote: null, // Clear the team vote data for the next round
+                }, true);
+
+                // Return early since we've already updated the game
+                return;
             }
             // 5c. If 'rethrow' votes are more than or equal to 'agree' votes.
             else {
@@ -464,90 +478,106 @@ export class GameService {
         }
     }
 
-    async aiSubmitVoteForPlayer(aiPlayerId: string): Promise<void> {
+    // New method to submit all AI votes in a single update
+    async submitAllAIVotes(aiPlayerIds: string[]): Promise<void> {
         const gameId = this.activeGameId();
         const game = this.currentGame();
 
-        if (!gameId || !game) {
-            return; // No active game
+        if (!gameId || !game || !game.teamVote) {
+            return; // No active game or no team vote
         }
 
-        // Check if the player is an AI and needs to vote
-        if (!aiPlayerId.startsWith(gameId + '-AI-') || game.status !== 'teamVoting' || game.teamVote?.votes?.[aiPlayerId]) {
-            return; // Not an AI or already voted or not in voting phase
-        }
+        // Collect votes for all AI players
+        const votes: {[playerId: string]: 'agree' | 'rethrow'} = {};
+        const gameLogEntries: {timestamp: Date, message: string}[] = [];
 
-        // Determine the vote based on AI role
-        const aiRole = game.roles?.[aiPlayerId];
-        let vote: 'agree' | 'rethrow';
-
-        // Always agree on the 5th vote failure to prevent automatic Sinister win
-        if ((game.voteFailsThisRound ?? 0) === 4) {
-            vote = 'agree';
-        }
-        // Loyal Dexter and Duke should generally agree to proposed teams
-        else if (aiRole === 'LoyalDexter' || aiRole === 'Duke') {
-            // 80% chance to agree for Loyal Dexter roles
-            vote = Math.random() < 0.8 ? 'agree' : 'rethrow';
-        }
-        // Sinister roles should be more likely to rethrow, especially if the team has few Sinister players
-        else if (aiRole === 'SinisterSpy' || aiRole === 'Sniper') {
-            // Check if the proposed team has Sinister players
-            const proposedTeam = game.teamVote?.proposedTeam || [];
-            const sinisterOnTeam = proposedTeam.filter(playerId => {
-                const playerRole = game.roles?.[playerId];
-                return playerRole === 'SinisterSpy' || playerRole === 'Sniper';
-            }).length;
-
-            // If no Sinister on team, high chance to rethrow
-            if (sinisterOnTeam === 0) {
-                vote = Math.random() < 0.8 ? 'rethrow' : 'agree';
+        for (const aiPlayerId of aiPlayerIds) {
+            // Skip if player is not an AI or has already voted
+            if (!aiPlayerId.startsWith(gameId + '-AI-') || game.teamVote?.votes?.[aiPlayerId]) {
+                continue;
             }
-            // If at least one Sinister on team, more likely to agree
+
+            // Determine the vote based on AI role
+            const aiRole = game.roles?.[aiPlayerId];
+            let vote: 'agree' | 'rethrow';
+
+            // Always agree on the 5th vote failure to prevent automatic Sinister win
+            if ((game.voteFailsThisRound ?? 0) === 4) {
+                vote = 'agree';
+            }
+            // Loyal Dexter and Duke should generally agree to proposed teams
+            else if (aiRole === 'LoyalDexter' || aiRole === 'Duke') {
+                // 80% chance to agree for Loyal Dexter roles
+                vote = Math.random() < 0.8 ? 'agree' : 'rethrow';
+            }
+            // Sinister roles should be more likely to rethrow, especially if the team has few Sinister players
+            else if (aiRole === 'SinisterSpy' || aiRole === 'Sniper') {
+                // Check if the proposed team has Sinister players
+                const proposedTeam = game.teamVote?.proposedTeam || [];
+                const sinisterOnTeam = proposedTeam.filter(playerId => {
+                    const playerRole = game.roles?.[playerId];
+                    return playerRole === 'SinisterSpy' || playerRole === 'Sniper';
+                }).length;
+
+                // If no Sinister on team, high chance to rethrow
+                if (sinisterOnTeam === 0) {
+                    vote = Math.random() < 0.8 ? 'rethrow' : 'agree';
+                }
+                // If at least one Sinister on team, more likely to agree
+                else {
+                    vote = Math.random() < 0.6 ? 'agree' : 'rethrow';
+                }
+            }
+            // Default random vote for unknown roles
             else {
-                vote = Math.random() < 0.6 ? 'agree' : 'rethrow';
+                vote = Math.random() > 0.5 ? 'agree' : 'rethrow';
             }
-        }
-        // Default random vote for unknown roles
-        else {
-            vote = Math.random() > 0.5 ? 'agree' : 'rethrow';
+
+            console.log(`AI ${aiPlayerId} (${aiRole}) voting: ${vote}`);
+
+            // Add vote to the collection
+            votes[aiPlayerId] = vote;
+
+            // Add log entry
+            gameLogEntries.push({
+                timestamp: new Date(),
+                message: `${game.players[aiPlayerId]?.name || 'AI Player'} voted to ${vote} the team.`
+            });
         }
 
-        console.log(`AI ${aiPlayerId} (${aiRole}) voting: ${vote}`);
-
-        // Record the vote directly in Firebase without using submitVote
-        // This avoids the need to temporarily override the current user ID
-        if (!game.teamVote) {
-            console.error(`No teamVote object found for game ${gameId}`);
+        // If no votes were collected, return
+        if (Object.keys(votes).length === 0) {
             return;
         }
 
+        // Combine with existing votes
         const updatedVotes = {
             ...(game.teamVote.votes || {}),
-            [aiPlayerId]: vote
-        };
-
-        const gameLogEntry = {
-            timestamp: new Date(),
-            message: `${game.players[aiPlayerId]?.name || 'AI Player'} voted to ${vote} the team.`
+            ...votes
         };
 
         try {
+            // Update Firebase with all votes in a single update
             await this.firestoreService.updateDocument('games', gameId, {
                 teamVote: {
                     ...game.teamVote,
                     votes: updatedVotes
                 },
-                gameLog: [...(game.gameLog || []), gameLogEntry]
+                gameLog: [...(game.gameLog || []), ...gameLogEntries]
             }, true);
 
-            console.log(`AI ${aiPlayerId} vote recorded successfully`);
+            console.log(`All AI votes recorded successfully`);
 
-            // Check if all players have voted after this AI vote
+            // Check if all players have voted after this batch of AI votes
             this.checkIfAllVoted(game, updatedVotes);
         } catch (error) {
-            console.error(`Error when AI ${aiPlayerId} tried to vote:`, error);
+            console.error(`Error when submitting AI votes:`, error);
         }
+    }
+
+    // Keep for backward compatibility, but modify to use the batch method
+    async aiSubmitVoteForPlayer(aiPlayerId: string): Promise<void> {
+        this.submitAllAIVotes([aiPlayerId]);
     }
 
     // Helper method to check if all players have voted after an AI vote
@@ -575,6 +605,20 @@ export class GameService {
                 nextStatus = 'mission';
                 additionalLogMessage = `Team approved with ${voteCounts.agree} agree votes and ${voteCounts.rethrow} rethrow votes. Starting mission.`;
                 nextVoteFails = 0; // Reset vote fails on successful vote
+
+                // Set the mission team to the proposed team that was just approved
+                const missionTeam = game.teamVote?.proposedTeam || [];
+                await this.firestoreService.updateDocument('games', gameId, {
+                    mission: { team: missionTeam, cardsPlayed: {} },
+                    status: nextStatus,
+                    currentTO_id: nextTOId,
+                    voteFailsThisRound: nextVoteFails,
+                    gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: additionalLogMessage }],
+                    teamVote: null, // Clear the team vote data for the next round
+                }, true);
+
+                // Return early since we've already updated the game
+                return;
             }
             // If 'rethrow' votes are more than or equal to 'agree' votes
             else {

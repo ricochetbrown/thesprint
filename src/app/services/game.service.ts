@@ -52,11 +52,17 @@ export class GameService {
                             this.aiProposeTeam();
                         }
 
-                        // Check if the current player is an AI and needs to play a mission card
-                        const isAICheckMission = currentUserId && gameId && currentUserId.startsWith(gameId + '-AI-'); // Check if the gameId is part of the AI ID
+                        // Check if any AI players need to play mission cards
+                        if (game && gameId && game.status === 'mission' && game.mission?.team) {
+                            // Find all AI players on the mission team who haven't played a card yet
+                            const aiPlayersOnMission = game.mission.team.filter(playerId =>
+                                playerId.startsWith(gameId + '-AI-') && !game.mission?.cardsPlayed?.[playerId]
+                            );
 
-                        if (game && currentUserId && isAICheckMission && game.status === 'mission' && game.mission?.team?.includes(currentUserId) && !game.mission?.cardsPlayed?.[currentUserId]) {
-                            this.aiSubmitMissionCard();
+                            // Make each AI player play a card
+                            for (const aiPlayerId of aiPlayersOnMission) {
+                                this.aiSubmitMissionCardForPlayer(aiPlayerId);
+                            }
                         }
 
                         // Check if any AI players need to vote
@@ -612,23 +618,24 @@ export class GameService {
     }
 
 
-    async aiSubmitMissionCard(): Promise<void> {
+    async aiSubmitMissionCardForPlayer(aiPlayerId: string): Promise<void> {
         const gameId = this.activeGameId();
         const game = this.currentGame();
-        const currentUserId = this.authService.userId(); // Get current user ID inside the async function
 
-        if (!gameId || !game || !currentUserId) {
-            return; // No active game or user
+        if (!gameId || !game) {
+            return; // No active game
         }
 
-        // Check if the current player is an AI, the game status is 'mission', and their card is not played
-        const isAI = currentUserId.startsWith(gameId + '-AI-'); // Example AI ID check
-        if (!isAI || game.status !== 'mission' || !game.mission?.team?.includes(currentUserId) || game.mission?.cardsPlayed?.[currentUserId]) {
+        // Check if the player is an AI, on the mission team, and hasn't played a card yet
+        if (!aiPlayerId.startsWith(gameId + '-AI-') ||
+            game.status !== 'mission' ||
+            !game.mission?.team?.includes(aiPlayerId) ||
+            game.mission?.cardsPlayed?.[aiPlayerId]) {
             return; // Not an AI or not on mission or not in mission phase or already played
         }
 
         // Determine the card to play based on AI role
-        const aiRole = game.roles?.[currentUserId];
+        const aiRole = game.roles?.[aiPlayerId];
         let card: 'approve' | 'request' = 'approve'; // Default to approve for Dexter
 
         // Sinister roles typically play 'request'
@@ -641,7 +648,56 @@ export class GameService {
              card = 'approve';
         }
 
-        await this.submitMissionCard(card);
+        console.log(`AI ${aiPlayerId} (${aiRole}) playing mission card: ${card}`);
+
+        // Record the card directly in Firebase without using submitMissionCard
+        if (!game.mission) {
+            console.error(`No mission object found for game ${gameId}`);
+            return;
+        }
+
+        const updatedCardsPlayed = {
+            ...(game.mission.cardsPlayed || {}),
+            [aiPlayerId]: card
+        };
+
+        const gameLogEntry = {
+            timestamp: new Date(),
+            message: `${game.players[aiPlayerId]?.name || 'AI Player'} played a card.`
+        };
+
+        try {
+            await this.firestoreService.updateDocument('games', gameId, {
+                'mission.cardsPlayed': updatedCardsPlayed,
+                gameLog: [...(game.gameLog || []), gameLogEntry]
+            }, true);
+
+            console.log(`AI ${aiPlayerId} mission card recorded successfully`);
+
+            // Check if all players on the mission have played their cards
+            this.checkIfAllCardsPlayed(game, updatedCardsPlayed);
+        } catch (error) {
+            console.error(`Error when AI ${aiPlayerId} tried to play a mission card:`, error);
+        }
+    }
+
+    // Keep the original method for backward compatibility
+    async aiSubmitMissionCard(): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = this.authService.userId();
+
+        if (!gameId || !game || !currentUserId) {
+            return; // No active game or user
+        }
+
+        // Check if the current user is an AI and needs to play a mission card
+        if (currentUserId.startsWith(gameId + '-AI-') &&
+            game.status === 'mission' &&
+            game.mission?.team?.includes(currentUserId) &&
+            !game.mission?.cardsPlayed?.[currentUserId]) {
+            await this.aiSubmitMissionCardForPlayer(currentUserId);
+        }
     }
 
     async submitMissionCard(card: 'approve' | 'request'): Promise<void> {
@@ -667,7 +723,74 @@ export class GameService {
         // 3. Record the current user's card\n
         const updatedCardsPlayed = { ...game.mission?.cardsPlayed, [currentUserId]: card };
 
-        await this.firestoreService.updateDocument('games', gameId, { 'mission.cardsPlayed': updatedCardsPlayed }, true);
+        const gameLogEntry = {
+            timestamp: new Date(),
+            message: `${game.players[currentUserId]?.name || 'Player'} played a card.`
+        };
+
+        await this.firestoreService.updateDocument('games', gameId, {
+            'mission.cardsPlayed': updatedCardsPlayed,
+            gameLog: [...(game.gameLog || []), gameLogEntry]
+        }, true);
+
+        // Check if all players on the mission have played their cards
+        this.checkIfAllCardsPlayed(game, updatedCardsPlayed);
+    }
+
+    // Helper method to check if all players on the mission have played their cards
+    private async checkIfAllCardsPlayed(game: Game, updatedCardsPlayed: {[playerId: string]: 'approve' | 'request'}): Promise<void> {
+        const gameId = this.activeGameId();
+        if (!gameId || !game || !game.mission?.team) return;
+
+        const missionTeam = game.mission.team;
+        const allPlayed = missionTeam.every(playerId => updatedCardsPlayed.hasOwnProperty(playerId));
+
+        // If all players on the mission have played their cards, process the results
+        if (allPlayed) {
+            const requestCount = Object.values(updatedCardsPlayed).filter(card => card === 'request').length;
+            const approveCount = Object.values(updatedCardsPlayed).filter(card => card === 'approve').length;
+
+            // Determine if the mission succeeded or failed
+            // In "The Sprint", any 'request' card causes the mission to fail
+            const missionResult: 'dexter' | 'sinister' = requestCount > 0 ? 'sinister' : 'dexter';
+
+            // Update the story results
+            const storyResults = [...(game.storyResults || [])];
+            const currentStoryIndex = (game.currentStoryNum || 1) - 1;
+            storyResults[currentStoryIndex] = missionResult;
+
+            let additionalLogMessage = '';
+            if (missionResult === 'dexter') {
+                additionalLogMessage = `Mission succeeded with ${approveCount} approve cards and ${requestCount} request cards. Dexter wins this story!`;
+            } else {
+                additionalLogMessage = `Mission failed with ${requestCount} request cards. Sinister wins this story!`;
+            }
+
+            // Check if the game is over
+            const dexterWins = storyResults.filter(r => r === 'dexter').length;
+            const sinisterWins = storyResults.filter(r => r === 'sinister').length;
+
+            let nextStatus: Game['status'] = 'results';
+            let winner: 'dexter' | 'sinister' | undefined = undefined;
+
+            // In "The Sprint", Dexter needs 3 successful missions to win, Sinister needs 3 failed missions
+            if (dexterWins >= 3) {
+                nextStatus = 'gameOver';
+                winner = 'dexter';
+                additionalLogMessage += ` Dexter has won ${dexterWins} stories and wins the game!`;
+            } else if (sinisterWins >= 3) {
+                nextStatus = 'gameOver';
+                winner = 'sinister';
+                additionalLogMessage += ` Sinister has won ${sinisterWins} stories and wins the game!`;
+            }
+
+            await this.firestoreService.updateDocument('games', gameId, {
+                status: nextStatus,
+                storyResults: storyResults,
+                winner: winner,
+                gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: additionalLogMessage }],
+            }, true);
+        }
     }
 
     async nextRound(): Promise<void> {

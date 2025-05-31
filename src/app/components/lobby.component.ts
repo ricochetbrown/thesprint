@@ -36,28 +36,28 @@ import { FormsModule } from "@angular/forms";
 
                                 <div class="space-y-2">
                                     <div class="flex items-center">
-                                        <input type="checkbox" id="includeDuke" [checked]="includeDuke()" (change)="includeDuke.set($event.target.checked)" class="mr-2">
+                                        <input type="checkbox" id="includeDuke" [checked]="includeDuke()" (change)="handleDukeChange($event)" class="mr-2">
                                         <label for="includeDuke" class="cursor-pointer">
                                             <span class="font-medium">Duke</span> - Dexter team, knows Sinister team members
                                         </label>
                                     </div>
 
                                     <div class="flex items-center">
-                                        <input type="checkbox" id="includeSupportManager" [checked]="includeSupportManager()" (change)="includeSupportManager.set($event.target.checked)" class="mr-2">
+                                        <input type="checkbox" id="includeSupportManager" [checked]="includeSupportManager()" (change)="handleSupportManagerChange($event)" class="mr-2">
                                         <label for="includeSupportManager" class="cursor-pointer">
                                             <span class="font-medium">Support Manager</span> - Dexter team, knows the Duke
                                         </label>
                                     </div>
 
                                     <div class="flex items-center">
-                                        <input type="checkbox" id="includeNerlin" [checked]="includeNerlin()" (change)="includeNerlin.set($event.target.checked)" class="mr-2">
+                                        <input type="checkbox" id="includeNerlin" [checked]="includeNerlin()" (change)="handleNerlinChange($event)" class="mr-2">
                                         <label for="includeNerlin" class="cursor-pointer">
                                             <span class="font-medium">Nerlin</span> - Sinister team, hidden from Duke
                                         </label>
                                     </div>
 
                                     <div class="flex items-center">
-                                        <input type="checkbox" id="includeDevSlayer" [checked]="includeDevSlayer()" (change)="includeDevSlayer.set($event.target.checked)" class="mr-2">
+                                        <input type="checkbox" id="includeDevSlayer" [checked]="includeDevSlayer()" (change)="handleDevSlayerChange($event)" class="mr-2">
                                         <label for="includeDevSlayer" class="cursor-pointer">
                                             <span class="font-medium">Dev Slayer</span> - Sinister team, appears as Duke to Support Manager
                                         </label>
@@ -188,5 +188,26 @@ export class LobbyComponent implements OnInit {
                 await this.gameService.addAIPlayers(game.id, playersNeeded);
             }
         }
+    }
+
+    // Handler methods for role checkboxes
+    handleDukeChange(event: Event) {
+        const checked = (event.target as HTMLInputElement).checked;
+        this.includeDuke.set(checked);
+    }
+
+    handleSupportManagerChange(event: Event) {
+        const checked = (event.target as HTMLInputElement).checked;
+        this.includeSupportManager.set(checked);
+    }
+
+    handleNerlinChange(event: Event) {
+        const checked = (event.target as HTMLInputElement).checked;
+        this.includeNerlin.set(checked);
+    }
+
+    handleDevSlayerChange(event: Event) {
+        const checked = (event.target as HTMLInputElement).checked;
+        this.includeDevSlayer.set(checked);
     }
 }

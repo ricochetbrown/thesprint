@@ -1,7 +1,7 @@
 import { signal, WritableSignal, effect, inject, Injectable } from '@angular/core';
 import { FirestoreService } from './firestore.service';
 import { AuthService } from './auth.service';
-import { serverTimestamp, Unsubscribe } from 'firebase/firestore';
+import { serverTimestamp, Unsubscribe, where } from 'firebase/firestore';
 import { Game } from '../interfaces/game.interface';
 import { Player } from '../interfaces/player.interface';
 
@@ -1204,4 +1204,18 @@ export class GameService {
         console.log("nextRound: Completed");
     }
 
+    async getPublicGames(): Promise<Game[]> {
+        try {
+            // Query for public games that are in the lobby status
+            const publicGames = await this.firestoreService.getCollection<Game>(
+                'games',
+                true,
+                [where('settings.isPublic', '==', true), where('status', '==', 'lobby')]
+            );
+            return publicGames;
+        } catch (error) {
+            console.error("Error fetching public games:", error);
+            return [];
+        }
+    }
 }

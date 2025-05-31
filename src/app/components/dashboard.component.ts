@@ -1,8 +1,9 @@
-import { Component, inject, signal } from "@angular/core";
+import { Component, inject, signal, OnInit } from "@angular/core";
 import { AuthService } from "../services/auth.service";
 import { GameService } from "../services/game.service";
 import { FormsModule } from "@angular/forms";
 import { CommonModule } from "@angular/common";
+import { Game } from "../interfaces/game.interface";
 
 // --- Dashboard Component ---
 @Component({
@@ -30,13 +31,52 @@ import { CommonModule } from "@angular/common";
                     </button>
                 </div>
                 <div class="bg-slate-700 bg-opacity-85 p-6 rounded-lg shadow-2xl text-center">
-                    <h2 class="text-3xl font-semibold mb-3">Join Existing Game</h2>
+                    <h2 class="text-3xl font-semibold mb-3">Join Private Game</h2>
                     <input type="text" [(ngModel)]="joinGameId" class="w-full p-3 bg-slate-600 rounded border border-slate-500 mb-4 text-center" placeholder="Enter Game Code">
                     <button (click)="handleJoinGame()" class="w-full bg-teal-500 hover:bg-teal-600 text-black font-bold py-3 px-6 rounded-lg text-lg">
-                        Join Game
+                        Join Private Game
                     </button>
                 </div>
             </div>
+
+            <div class="max-w-4xl mx-auto mb-12">
+                <div class="bg-slate-700 bg-opacity-85 p-6 rounded-lg shadow-2xl">
+                    <h2 class="text-3xl font-semibold mb-6 text-center">Available Public Games</h2>
+
+                    @if (isLoading()) {
+                        <div class="text-center py-8">
+                            <p>Loading available games...</p>
+                        </div>
+                    } @else if (publicGames().length === 0) {
+                        <div class="text-center py-8">
+                            <p>No public games available to join.</p>
+                            <button (click)="fetchPublicGames()" class="mt-4 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded">
+                                Refresh
+                            </button>
+                        </div>
+                    } @else {
+                        <div class="grid gap-4">
+                            @for (game of publicGames(); track game.id) {
+                                <div class="bg-slate-800 p-4 rounded-lg flex justify-between items-center">
+                                    <div>
+                                        <h3 class="text-xl font-semibold">{{ game.name }}</h3>
+                                        <p class="text-sm text-gray-400">Host: {{ game.hostName }} | Players: {{ Object.keys(game.players).length }} / {{ game.settings.maxPlayers }}</p>
+                                    </div>
+                                    <button (click)="handleJoinPublicGame(game.id)" class="bg-teal-500 hover:bg-teal-600 text-black font-bold py-2 px-4 rounded">
+                                        Join
+                                    </button>
+                                </div>
+                            }
+                            <div class="text-center mt-4">
+                                <button (click)="fetchPublicGames()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded">
+                                    Refresh
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
             @if (actionError()) {
                 <p class="text-center text-red-400 mb-4">{{actionError()}}</p>
             }
@@ -85,7 +125,7 @@ import { CommonModule } from "@angular/common";
         CommonModule
     ] // Add FormsModule
 })
-export class DashboardComponent {
+export class DashboardComponent implements OnInit {
     authService = inject(AuthService);
     gameService = inject(GameService);
 
@@ -95,6 +135,27 @@ export class DashboardComponent {
     newGameIsPublic = true;
     joinGameId = '';
     actionError = signal<string | null>(null);
+    publicGames = signal<Game[]>([]);
+    isLoading = signal<boolean>(false);
+
+    // Helper for templates
+    objectKeys = Object.keys;
+
+    ngOnInit() {
+        this.fetchPublicGames();
+    }
+
+    async fetchPublicGames() {
+        this.isLoading.set(true);
+        try {
+            const games = await this.gameService.getPublicGames();
+            this.publicGames.set(games);
+        } catch (error) {
+            console.error('Error fetching public games:', error);
+        } finally {
+            this.isLoading.set(false);
+        }
+    }
 
     async handleCreateGame() {
         this.actionError.set(null);
@@ -120,6 +181,17 @@ export class DashboardComponent {
         } catch (error: any) {
             this.actionError.set(error.message || "Failed to join game.");
             console.error("Join game error:", error);
+        }
+    }
+
+    async handleJoinPublicGame(gameId: string) {
+        this.actionError.set(null);
+        try {
+            await this.gameService.joinGame(gameId);
+            // Navigation to lobby by AppComponent effect
+        } catch (error: any) {
+            this.actionError.set(error.message || "Failed to join game.");
+            console.error("Join public game error:", error);
         }
     }
 }

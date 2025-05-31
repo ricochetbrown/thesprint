@@ -450,6 +450,19 @@ export class GameService {
                     teamVote: null, // Clear the team vote data for the next round
                 }, true);
 
+                // Check if there are any AI players on the mission team and trigger them to submit their cards
+                const aiPlayersOnMission = missionTeam.filter(playerId =>
+                    playerId.startsWith(gameId + '-AI-')
+                );
+
+                if (aiPlayersOnMission.length > 0) {
+                    console.log(`Triggering ${aiPlayersOnMission.length} AI players to submit mission cards`);
+                    // Use setTimeout to ensure this runs after the game state update is processed
+                    setTimeout(() => {
+                        this.submitAllAIMissionCards(aiPlayersOnMission);
+                    }, 500);
+                }
+
                 // Return early since we've already updated the game
                 return;
             }

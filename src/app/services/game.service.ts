@@ -61,7 +61,27 @@ export class GameService {
 
                             // If there are AI players who need to play cards, handle all cards in a single update
                             if (aiPlayersOnMission.length > 0) {
-                                this.submitAllAIMissionCards(aiPlayersOnMission);
+                                console.log("Game listener: Triggering AI mission cards for", aiPlayersOnMission);
+                                // Use setTimeout to avoid blocking the listener and to ensure this runs after any other state updates
+                                setTimeout(async () => {
+                                    await this.submitAllAIMissionCards(aiPlayersOnMission);
+
+                                    // After AI players have submitted their cards, check if all cards have been played
+                                    // This is a safety check in case the game state wasn't updated properly
+                                    const currentGame = this.currentGame();
+                                    if (currentGame && currentGame.status === 'mission' && currentGame.mission?.team) {
+                                        const allCardsPlayed = currentGame.mission.team.every(playerId =>
+                                            currentGame.mission?.cardsPlayed?.[playerId]
+                                        );
+
+                                        if (allCardsPlayed) {
+                                            console.log("Game listener: All cards played, checking if game state needs to be updated");
+                                            // Create a copy of the game with the updated cards played
+                                            const updatedGame = { ...currentGame };
+                                            await this.checkIfAllCardsPlayed(updatedGame, currentGame.mission.cardsPlayed || {});
+                                        }
+                                    }
+                                }, 500);
                             }
                         }
 
@@ -458,9 +478,42 @@ export class GameService {
                 if (aiPlayersOnMission.length > 0) {
                     console.log(`Triggering ${aiPlayersOnMission.length} AI players to submit mission cards`);
                     // Use setTimeout to ensure this runs after the game state update is processed
-                    setTimeout(() => {
-                        this.submitAllAIMissionCards(aiPlayersOnMission);
+                    setTimeout(async () => {
+                        await this.submitAllAIMissionCards(aiPlayersOnMission);
+
+                        // After AI players have submitted their cards, check if all cards have been played
+                        // This is a safety check in case the game state wasn't updated properly
+                        const currentGame = this.currentGame();
+                        if (currentGame && currentGame.status === 'mission' && currentGame.mission?.team) {
+                            const allCardsPlayed = currentGame.mission.team.every(playerId =>
+                                currentGame.mission?.cardsPlayed?.[playerId]
+                            );
+
+                            if (allCardsPlayed) {
+                                console.log("submitVote: All cards played, checking if game state needs to be updated");
+                                // Create a copy of the game with the updated cards played
+                                const updatedGame = { ...currentGame };
+                                await this.checkIfAllCardsPlayed(updatedGame, currentGame.mission.cardsPlayed || {});
+                            }
+                        }
                     }, 500);
+
+                    // If all players on the mission are AI players, add an additional safety check
+                    if (aiPlayersOnMission.length === missionTeam.length) {
+                        console.log("All players on mission are AI players, adding additional safety check");
+                        // Add a longer timeout as an additional safety check
+                        setTimeout(async () => {
+                            const currentGame = this.currentGame();
+                            if (currentGame && currentGame.status === 'mission') {
+                                console.log("Safety check: Game still in mission state, forcing check for all cards played");
+                                // Force a check for all cards played
+                                if (currentGame.mission?.team && currentGame.mission?.cardsPlayed) {
+                                    const updatedGame = { ...currentGame };
+                                    await this.checkIfAllCardsPlayed(updatedGame, currentGame.mission.cardsPlayed);
+                                }
+                            }
+                        }, 3000); // Longer timeout for safety
+                    }
                 }
 
                 // Return early since we've already updated the game
@@ -864,25 +917,39 @@ export class GameService {
             return;
         }
 
-        const missionTeam = game.mission.team;
-        const allPlayed = missionTeam.every(playerId => updatedCardsPlayed.hasOwnProperty(playerId));
+        // If the game is not in 'mission' state, don't process
+        if (latestGame.status !== 'mission') {
+            console.log("checkIfAllCardsPlayed: Game not in mission state, current state:", latestGame.status);
+            return;
+        }
+
+        // Use the mission team and cards played from the latest game state
+        const missionTeam = latestGame.mission?.team || [];
+        const latestCardsPlayed = latestGame.mission?.cardsPlayed || {};
+
+        // Combine the cards played from the parameter with the latest cards played from the database
+        const combinedCardsPlayed = { ...latestCardsPlayed, ...updatedCardsPlayed };
+
+        const allPlayed = missionTeam.every(playerId => combinedCardsPlayed.hasOwnProperty(playerId));
 
         console.log("checkIfAllCardsPlayed: Mission team:", missionTeam);
-        console.log("checkIfAllCardsPlayed: Cards played:", updatedCardsPlayed);
+        console.log("checkIfAllCardsPlayed: Latest cards played:", latestCardsPlayed);
+        console.log("checkIfAllCardsPlayed: Updated cards played:", updatedCardsPlayed);
+        console.log("checkIfAllCardsPlayed: Combined cards played:", combinedCardsPlayed);
         console.log("checkIfAllCardsPlayed: All played:", allPlayed);
 
         // If all players on the mission have played their cards, process the results
         if (allPlayed) {
-            const requestCount = Object.values(updatedCardsPlayed).filter(card => card === 'request').length;
-            const approveCount = Object.values(updatedCardsPlayed).filter(card => card === 'approve').length;
+            const requestCount = Object.values(combinedCardsPlayed).filter(card => card === 'request').length;
+            const approveCount = Object.values(combinedCardsPlayed).filter(card => card === 'approve').length;
 
             // Determine if the mission succeeded or failed
             // In "The Sprint", any 'request' card causes the mission to fail
             const missionResult: 'dexter' | 'sinister' = requestCount > 0 ? 'sinister' : 'dexter';
 
             // Update the story results
-            const storyResults = [...(game.storyResults || [])];
-            const currentStoryIndex = (game.currentStoryNum || 1) - 1;
+            const storyResults = [...(latestGame.storyResults || [])];
+            const currentStoryIndex = (latestGame.currentStoryNum || 1) - 1;
             storyResults[currentStoryIndex] = missionResult;
 
             let additionalLogMessage = '';
@@ -910,15 +977,15 @@ export class GameService {
                 additionalLogMessage += ` Sinister has won ${sinisterWins} stories and wins the game!`;
             }
 
-            console.log("checkIfAllCardsPlayed: Current game status", game.status);
+            console.log("checkIfAllCardsPlayed: Current game status", latestGame.status);
             console.log("checkIfAllCardsPlayed: Updating game state to", nextStatus);
             try {
                 await this.firestoreService.updateDocument('games', gameId, {
                     status: nextStatus,
                     storyResults: storyResults,
                     winner: winner,
-                    mission: { ...game.mission, cardsPlayed: updatedCardsPlayed },
-                    gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: additionalLogMessage }],
+                    mission: { ...latestGame.mission, cardsPlayed: combinedCardsPlayed },
+                    gameLog: [...(latestGame.gameLog || []), { timestamp: new Date(), message: additionalLogMessage }],
                 }, true);
                 console.log("checkIfAllCardsPlayed: Game state updated successfully");
 

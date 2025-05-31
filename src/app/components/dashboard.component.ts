@@ -60,7 +60,7 @@ import { Game } from "../interfaces/game.interface";
                                 <div class="bg-slate-800 p-4 rounded-lg flex justify-between items-center">
                                     <div>
                                         <h3 class="text-xl font-semibold">{{ game.name }}</h3>
-                                        <p class="text-sm text-gray-400">Host: {{ game.hostName }} | Players: {{ Object.keys(game.players).length }} / {{ game.settings.maxPlayers }}</p>
+                                        <p class="text-sm text-gray-400">Host: {{ game.hostName }} | Players: {{ getPlayerCount(game) }} / {{ game.settings.maxPlayers }}</p>
                                     </div>
                                     <button (click)="handleJoinPublicGame(game.id)" class="bg-teal-500 hover:bg-teal-600 text-black font-bold py-2 px-4 rounded">
                                         Join
@@ -138,11 +138,29 @@ export class DashboardComponent implements OnInit {
     publicGames = signal<Game[]>([]);
     isLoading = signal<boolean>(false);
 
-    // Helper for templates
-    objectKeys = Object.keys;
+    // Signal to store player counts for each game
+    playerCounts = signal<Record<string, number>>({});
 
     ngOnInit() {
         this.fetchPublicGames();
+    }
+
+    // Function to get player count for a game
+    getPlayerCount(game: Game): number {
+        if (!game || !game.id) return 0;
+
+        // Get count from signal if available
+        const counts = this.playerCounts();
+        if (counts && counts[game.id] !== undefined) {
+            return counts[game.id];
+        }
+
+        // Fallback to calculating if not in signal
+        if (game.players) {
+            return Object.keys(game.players).length;
+        }
+
+        return 0;
     }
 
     async fetchPublicGames() {
@@ -150,6 +168,15 @@ export class DashboardComponent implements OnInit {
         try {
             const games = await this.gameService.getPublicGames();
             this.publicGames.set(games);
+
+            // Update player counts for each game
+            const counts: Record<string, number> = {};
+            games.forEach(game => {
+                if (game && game.id && game.players) {
+                    counts[game.id] = Object.keys(game.players).length;
+                }
+            });
+            this.playerCounts.set(counts);
         } catch (error) {
             console.error('Error fetching public games:', error);
         } finally {

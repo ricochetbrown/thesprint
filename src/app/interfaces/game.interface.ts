@@ -13,7 +13,12 @@ export interface Game {
     settings: {
         maxPlayers: number;
         isPublic: boolean;
-        // Add other game settings, like optional roles
+        optionalRoles?: {
+            includeDuke: boolean;
+            includeSupportManager: boolean;
+            includeNerlin: boolean;
+            includeDevSlayer: boolean;
+        };
     };
     createdAt: Timestamp;
     updatedAt: Timestamp;

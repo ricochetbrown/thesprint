@@ -30,7 +30,7 @@ import { FormsModule } from "@angular/forms";
                                     'border-yellow-400 shadow-yellow-400/50 shadow-lg': playerId === game.currentTO_id,
                                     'border-gray-600': playerId !== game.currentTO_id
                                  }">
-                                <img src="https://via.placeholder.com/40/{{ getPlayerColor(playerId) }}/FFFFFF?Text={{game.players[playerId].name.substring(0,1).toUpperCase() || 'P'}}" alt="P" class="w-8 h-8 md:w-10 md:h-10 rounded-full mb-1">
+                                <img [src]="getPlayerAvatarUrl(playerId, game)" alt="P" class="w-8 h-8 md:w-10 md:h-10 rounded-full mb-1">
                                 <span class="text-xs md:text-sm truncate w-full">{{ game.players[playerId].name }}</span>
                                 @if (playerId === authService.userId()) {
                                     <span class="text-xs text-yellow-300">(You)</span>
@@ -50,7 +50,7 @@ import { FormsModule } from "@angular/forms";
                                             'bg-red-500 border-red-400': result === 'sinister',
                                             'bg-gray-600 border-gray-500': result === null
                                           }">
-                                        {{ $index + 1 }}
+                                        OD-{{ $index + 1 }}
                                     </span>
                                 }
                             </span>
@@ -69,7 +69,7 @@ import { FormsModule } from "@angular/forms";
                                 <div>
                                     @if (authService.userId() === game.currentTO_id) {
                                         <p class="mb-2">
-                                            You are the TO. Select {{ getNumToSelect(game) }} players for User Story #{{game.currentStoryNum}}.
+                                            You are the TO. Select {{ getNumToSelect(game) }} players for User Story OD-{{game.currentStoryNum}}.
                                         </p>
                                         <div class="flex flex-wrap gap-2 mb-4">
                                             @for (playerId of game.playerOrder; track playerId) {
@@ -133,8 +133,8 @@ import { FormsModule } from "@angular/forms";
                             }
                             @case ('mission') {
                                 <div>
-                                    <p class="mb-2">Team on mission: <span class="font-bold">{{ getMissionTeamNames(game) }}</span></p>
-                                    @if (isPlayerOnMission(game)) {
+                                    <p class="mb-2">Team on User Story: <span class="font-bold">{{ getUserStoryTeamNames(game) }}</span></p>
+                                    @if (isPlayerOnUserStory(game)) {
                                         <p class="mb-4">Play your card (Approve/Request Changes).</p>
                                         <div class="flex gap-4">
                                             <button (click)="gameService.submitMissionCard('approve')"
@@ -149,10 +149,10 @@ import { FormsModule } from "@angular/forms";
                                             </button>
                                         </div>
                                         <p class="mt-4 text-sm">
-                                            Cards Played: {{ missionCardsPlayedCount() }} / {{ game.mission?.team?.length }}
+                                            Cards Played: {{ userStoryCardsPlayedCount() }} / {{ game.mission?.team?.length }}
                                         </p>
                                     } @else {
-                                        <p class="mb-4">Waiting for mission results...</p>
+                                        <p class="mb-4">Waiting for User Story results...</p>
                                     }
                                 </div>
                             }
@@ -160,9 +160,9 @@ import { FormsModule } from "@angular/forms";
                                 <div>
                                 @if (game.storyResults && (game.currentStoryNum ?? 1) > 1) {
                                     @if (game.storyResults[(game.currentStoryNum ?? 1) - 2] === 'dexter') {
-                                        <p class="text-xl font-bold text-green-400 mb-4">User Story #{{ (game.currentStoryNum ?? 1) - 1 }} Succeeded!</p>
+                                        <p class="text-xl font-bold text-green-400 mb-4">User Story OD-{{ (game.currentStoryNum ?? 1) - 1 }} Succeeded!</p>
                                     } @else if (game.storyResults[(game.currentStoryNum ?? 1) - 2] === 'sinister') {
-                                        <p class="text-xl font-bold text-red-400 mb-4">User Story #{{ (game.currentStoryNum ?? 1) - 1 }} Failed!</p>
+                                        <p class="text-xl font-bold text-red-400 mb-4">User Story OD-{{ (game.currentStoryNum ?? 1) - 1 }} Failed!</p>
                                     }
                                 } @else {
                                     <p class="mb-2">Processing results...</p>
@@ -224,7 +224,7 @@ export class GameBoardComponent {
         return 0;
     });
 
-    missionCardsPlayedCount = computed(() => {
+    userStoryCardsPlayedCount = computed(() => {
         const game = this.gameService.currentGame();
         if (game?.mission?.cardsPlayed) {
             return Object.keys(game.mission.cardsPlayed).length;
@@ -233,6 +233,38 @@ export class GameBoardComponent {
     });
 
     getPlayerColor(playerId: string): string {
+        const game = this.gameService.currentGame();
+        const myId = this.authService.userId();
+
+        if (game && myId && game.roles) {
+            const myRole = game.roles[myId];
+            const playerRole = game.roles[playerId];
+
+            // Duke can see all Sinister team members except Nerlin
+            if (myRole === 'Duke' &&
+                (playerRole === 'Sniper' || playerRole === 'SinisterSpy' || playerRole === 'DevSlayer')) {
+                return 'FF0000'; // Red color for Sinister team members when viewed by Duke
+            }
+
+            // Support Manager can see the Duke
+            if (myRole === 'SupportManager' && playerRole === 'Duke') {
+                return '4B0082'; // Indigo color for Duke when viewed by Support Manager
+            }
+
+            // Support Manager sees Dev Slayer as Duke
+            if (myRole === 'SupportManager' && playerRole === 'DevSlayer') {
+                return '4B0082'; // Same color as Duke for Dev Slayer when viewed by Support Manager
+            }
+
+            // Sinister Spies can see other Sinister Spies
+            if ((myRole === 'Sniper' || myRole === 'SinisterSpy' || myRole === 'Nerlin' || myRole === 'DevSlayer') &&
+                (playerRole === 'Sniper' || playerRole === 'SinisterSpy' || playerRole === 'Nerlin' || playerRole === 'DevSlayer') &&
+                myId !== playerId) {
+                return 'FF0000'; // Red color for Sinister team members when viewed by other Sinister Spies
+            }
+        }
+
+        // Default color generation for other cases
         let hash = 0;
         for (let i = 0; i < playerId.length; i++) {
             hash = playerId.charCodeAt(i) + ((hash << 5) - hash);
@@ -248,7 +280,7 @@ export class GameBoardComponent {
         switch(status) {
             case 'teamProposal': return 'Team Proposal';
             case 'teamVoting': return 'Team Vote';
-            case 'mission': return 'Pull Request Review';
+            case 'mission': return 'User Story Review';
             case 'results': return 'Results';
             case 'gameOver': return 'Game Over';
             default: return status.charAt(0).toUpperCase() + status.slice(1);
@@ -283,12 +315,12 @@ export class GameBoardComponent {
         return game.teamVote.proposedTeam.map(id => game.players[id]?.name || 'Unknown').join(', ');
     }
 
-    getMissionTeamNames(game: Game): string {
+    getUserStoryTeamNames(game: Game): string {
         if (!game.mission?.team) return 'N/A';
         return game.mission.team.map(id => game.players[id]?.name || 'Unknown').join(', ');
     }
 
-    isPlayerOnMission(game: Game): boolean {
+    isPlayerOnUserStory(game: Game): boolean {
         const myId = this.authService.userId();
         return !!(myId && game.mission?.team?.includes(myId));
     }
@@ -296,8 +328,11 @@ export class GameBoardComponent {
     getRoleDescription(role: string): string {
         if (role === 'Duke') return "You know Sinister. Guide Dexter. Must Approve.";
         if (role === 'Sniper') return "Sinister. If Dexter wins, you can snipe the Duke.";
-        if (role === 'SinisterSpy') return "Sinister. Cause missions to fail. Can Approve/Request.";
-        if (role === 'LoyalDexter') return "Dexter. Help missions succeed. Must Approve.";
+        if (role === 'SinisterSpy') return "Sinister. Cause User Stories to fail. Can Approve/Request.";
+        if (role === 'LoyalDexter') return "Dexter. Help User Stories succeed. Must Approve.";
+        if (role === 'SupportManager') return "Dexter. You know who the Duke is. Protect the Duke's identity.";
+        if (role === 'Nerlin') return "Sinister. Your identity is hidden from the Duke.";
+        if (role === 'DevSlayer') return "Sinister. You appear as the Duke to the Support Manager.";
         return "Your objective will be revealed.";
     }
 
@@ -328,5 +363,41 @@ export class GameBoardComponent {
 
     nextRound(): void {
         this.gameService.nextRound();
+    }
+
+    getPlayerAvatarUrl(playerId: string, game: Game): string {
+        const myId = this.authService.userId();
+
+        if (game.roles && myId && game.roles[myId]) {
+            const myRole = game.roles[myId];
+            const playerRole = game.roles[playerId];
+
+            // Check if the player is a Duke
+            if (playerRole === 'Duke') {
+                // Return a placeholder image for Duke
+                return "https://via.placeholder.com/40/4B0082/FFFFFF?Text=Duke";
+            }
+
+            // Support Manager sees Dev Slayer as Duke
+            if (myRole === 'SupportManager' && playerRole === 'DevSlayer') {
+                return "https://via.placeholder.com/40/4B0082/FFFFFF?Text=Duke";
+            }
+
+            // Special avatars for new roles
+            if (playerRole === 'SupportManager') {
+                return "https://via.placeholder.com/40/008080/FFFFFF?Text=SM"; // Teal color for Support Manager
+            }
+
+            if (playerRole === 'Nerlin') {
+                return "https://via.placeholder.com/40/800080/FFFFFF?Text=N"; // Purple color for Nerlin
+            }
+
+            if (playerRole === 'DevSlayer') {
+                return "https://via.placeholder.com/40/8B0000/FFFFFF?Text=DS"; // Dark red color for Dev Slayer
+            }
+        }
+
+        // Default placeholder image with color based on player ID
+        return `https://via.placeholder.com/40/${this.getPlayerColor(playerId)}/FFFFFF?Text=${game.players[playerId].name.substring(0,1).toUpperCase() || 'P'}`;
     }
 }

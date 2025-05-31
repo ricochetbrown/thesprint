@@ -106,7 +106,17 @@ export class GameService {
         });
     }
 
-    async createGame(gameName: string, maxPlayers: number, isPublic: boolean): Promise<string> {
+    async createGame(
+        gameName: string,
+        maxPlayers: number,
+        isPublic: boolean,
+        optionalRoles?: {
+            includeDuke: boolean,
+            includeSupportManager: boolean,
+            includeNerlin: boolean,
+            includeDevSlayer: boolean
+        }
+    ): Promise<string> {
         const currentUser = this.authService.currentUser();
         const currentUserId = this.authService.userId();
 
@@ -118,6 +128,14 @@ export class GameService {
             isHost: true
         };
 
+        // Default optional roles if not provided
+        const defaultOptionalRoles = {
+            includeDuke: true, // Duke is included by default
+            includeSupportManager: false,
+            includeNerlin: false,
+            includeDevSlayer: false
+        };
+
         const gameData: Omit<Game, 'id' | 'createdAt' | 'updatedAt'> = { // Firestore service adds timestamps
             name: gameName || `Sprint Game by ${hostPlayer.name}`,
             hostId: currentUserId,
@@ -125,7 +143,11 @@ export class GameService {
             status: 'lobby',
             players: { [currentUserId]: hostPlayer },
             playerOrder: [currentUserId],
-            settings: { maxPlayers, isPublic },
+            settings: {
+                maxPlayers,
+                isPublic,
+                optionalRoles: optionalRoles || defaultOptionalRoles
+            },
             // Initialize other game fields as needed
             storiesTotal: 5, // Default for "The Sprint"
             storyResults: Array(5).fill(null),
@@ -200,6 +222,26 @@ export class GameService {
         this.activeGameId.set(null);
     }
 
+    async updateGameSettings(optionalRoles: { includeDuke: boolean, includeSupportManager: boolean, includeNerlin: boolean, includeDevSlayer: boolean }): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = this.authService.userId();
+
+        if (!gameId || !game || game.hostId !== currentUserId) {
+            throw new Error("Only the host can update game settings.");
+        }
+        if (game.status !== 'lobby') {
+            throw new Error("Game settings can only be updated in the lobby.");
+        }
+
+        await this.firestoreService.updateDocument('games', gameId, {
+            settings: {
+                ...game.settings,
+                optionalRoles
+            }
+        }, true);
+    }
+
     async startGame(): Promise<void> {
         const gameId = this.activeGameId();
         const game = this.currentGame();
@@ -215,10 +257,9 @@ export class GameService {
             throw new Error("Game already started or not in lobby.");
         }
 
-        // TODO: Implement role assignment logic here based on "manual (1).pdf" player counts
-        // For now, just set status to 'starting' (which could trigger role assignment)
-        // and then to 'teamProposal' with the first TO.
-        const roles = this.assignRoles(game.playerOrder);
+        // Assign roles based on game settings and player count
+        const roles = this.assignRoles(game.playerOrder, game);
+
         // Randomly select a player to be the first TO
         const randomIndex = Math.floor(Math.random() * game.playerOrder.length);
         const firstTO = game.playerOrder[randomIndex];
@@ -256,17 +297,24 @@ export class GameService {
         await this.firestoreService.updateDocument('games', gameId, { players: updatedPlayers, playerOrder: updatedPlayerOrder }, true);
     }
 
-    private assignRoles(playerIds: string[]): { [playerId: string]: string } {
-        // This is a placeholder. Implement actual role assignment based on player count
-        // from "manual (1).pdf". E.g., 5 players: 3 Dexter (1 Duke), 2 Sinister (1 Sniper).
+    private assignRoles(playerIds: string[], game: Game): { [playerId: string]: string } {
         const numPlayers = playerIds.length;
         const assignedRoles: { [playerId: string]: string } = {};
         let rolesToAssign: string[] = [];
+        let dexterRoles: string[] = [];
+        let sinisterRoles: string[] = [];
         let numLoyalDexter = 0;
         let numSinisterSpy = 0;
 
+        // Get optional roles settings
+        const optionalRoles = game.settings.optionalRoles || {
+            includeDuke: true,
+            includeSupportManager: false,
+            includeNerlin: false,
+            includeDevSlayer: false
+        };
+
         // Determine number of Loyal Dexters and Sinister Spies based on total players
-        // (This is a common distribution pattern, adjust based on actual game rules)
         if (numPlayers >= 5 && numPlayers <= 6) {
             numLoyalDexter = 3;
             numSinisterSpy = numPlayers - numLoyalDexter;
@@ -281,24 +329,74 @@ export class GameService {
             numSinisterSpy = numPlayers - numLoyalDexter;
         }
 
-        // Ensure at least one Duke, one Sniper, one Sinister Spy
-        // (Duke is one of the Loyal Dexters, Sniper is one of the Sinister Spies)
-        rolesToAssign.push('Duke'); // One Duke from Loyal Dexters
-        for (let i = 0; i < numLoyalDexter - 1; i++) {
-            rolesToAssign.push('LoyalDexter');
+        // Add optional roles based on settings
+        // For Dexter team
+        if (optionalRoles.includeDuke) {
+            dexterRoles.push('Duke');
+            numLoyalDexter--;
         }
 
-        rolesToAssign.push('Sniper'); // One Sniper from Sinister Spies
-        for (let i = 0; i < numSinisterSpy - 1; i++) {
-            rolesToAssign.push('SinisterSpy');
+        if (optionalRoles.includeSupportManager) {
+            dexterRoles.push('SupportManager');
+            numLoyalDexter--;
+        }
+
+        // Fill remaining Dexter slots with Loyal Dexter
+        for (let i = 0; i < numLoyalDexter; i++) {
+            dexterRoles.push('LoyalDexter');
+        }
+
+        // For Sinister team
+        sinisterRoles.push('Sniper'); // Always include one Sniper
+        numSinisterSpy--;
+
+        if (optionalRoles.includeNerlin) {
+            sinisterRoles.push('Nerlin');
+            numSinisterSpy--;
+        }
+
+        if (optionalRoles.includeDevSlayer) {
+            sinisterRoles.push('DevSlayer');
+            numSinisterSpy--;
+        }
+
+        // Fill remaining Sinister slots with Sinister Spy
+        for (let i = 0; i < numSinisterSpy; i++) {
+            sinisterRoles.push('SinisterSpy');
+        }
+
+        // Combine all roles
+        rolesToAssign = [...dexterRoles, ...sinisterRoles];
+
+        // Ensure we have enough roles for all players
+        if (rolesToAssign.length < numPlayers) {
+            const additionalRoles = numPlayers - rolesToAssign.length;
+            // Add additional roles based on team balance
+            if (dexterRoles.length <= sinisterRoles.length) {
+                // Add more Dexter roles
+                for (let i = 0; i < additionalRoles; i++) {
+                    rolesToAssign.push('LoyalDexter');
+                }
+            } else {
+                // Add more Sinister roles
+                for (let i = 0; i < additionalRoles; i++) {
+                    rolesToAssign.push('SinisterSpy');
+                }
+            }
         }
 
         // Shuffle roles and assign
         rolesToAssign.sort(() => Math.random() - 0.5);
 
         playerIds.forEach((id, index) => {
-            assignedRoles[id] = rolesToAssign[index];
+            if (index < rolesToAssign.length) {
+                assignedRoles[id] = rolesToAssign[index];
+            } else {
+                // Fallback in case we somehow don't have enough roles
+                assignedRoles[id] = 'LoyalDexter';
+            }
         });
+
         console.log("Assigned roles:", assignedRoles);
         return assignedRoles;
     }

@@ -1,4 +1,4 @@
-import { Component, inject, signal } from "@angular/core";
+import { Component, inject, signal, OnInit } from "@angular/core";
 import { AuthService } from "../services/auth.service";
 import { GameService } from "../services/game.service";
 import { CommonModule } from "@angular/common";
@@ -27,6 +27,44 @@ import { FormsModule } from "@angular/forms";
                             <p><strong>Players:</strong> {{ objectKeys(game.players).length }} / {{ game.settings.maxPlayers }}</p>
                             <p><strong>Visibility:</strong> {{ game.settings.isPublic ? 'Public' : 'Private' }}</p>
                         </div>
+
+                        <!-- Role Selection Section (Only visible to host) -->
+                        @if (authService.userId() === game.hostId) {
+                            <div class="bg-slate-700 bg-opacity-85 p-6 rounded-lg shadow-xl">
+                                <h2 class="text-2xl font-semibold mb-4 border-b border-slate-600 pb-2">Optional Roles</h2>
+                                <p class="mb-3 text-sm text-gray-300">Select which optional roles to include in the game:</p>
+
+                                <div class="space-y-2">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="includeDuke" [checked]="includeDuke()" (change)="includeDuke.set($event.target.checked)" class="mr-2">
+                                        <label for="includeDuke" class="cursor-pointer">
+                                            <span class="font-medium">Duke</span> - Dexter team, knows Sinister team members
+                                        </label>
+                                    </div>
+
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="includeSupportManager" [checked]="includeSupportManager()" (change)="includeSupportManager.set($event.target.checked)" class="mr-2">
+                                        <label for="includeSupportManager" class="cursor-pointer">
+                                            <span class="font-medium">Support Manager</span> - Dexter team, knows the Duke
+                                        </label>
+                                    </div>
+
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="includeNerlin" [checked]="includeNerlin()" (change)="includeNerlin.set($event.target.checked)" class="mr-2">
+                                        <label for="includeNerlin" class="cursor-pointer">
+                                            <span class="font-medium">Nerlin</span> - Sinister team, hidden from Duke
+                                        </label>
+                                    </div>
+
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="includeDevSlayer" [checked]="includeDevSlayer()" (change)="includeDevSlayer.set($event.target.checked)" class="mr-2">
+                                        <label for="includeDevSlayer" class="cursor-pointer">
+                                            <span class="font-medium">Dev Slayer</span> - Sinister team, appears as Duke to Support Manager
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        }
                         <div class="bg-slate-700 bg-opacity-85 p-6 rounded-lg shadow-xl">
                             <h2 class="text-2xl font-semibold mb-4 border-b border-slate-600 pb-2">Players</h2>
                             <div class="space-y-3">
@@ -67,7 +105,7 @@ import { FormsModule } from "@angular/forms";
                                 }
 
                                 <button (click)="handleStartGame()"
-                                        [disabled]="objectKeys(game.players).length < 5 || objectKeys(game.players).length > 12" 
+                                        [disabled]="objectKeys(game.players).length < 5 || objectKeys(game.players).length > 12"
                                         class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-lg text-xl disabled:opacity-50 disabled:cursor-not-allowed" [class.bg-red-500]="objectKeys(game.players).length > 12">
                                     {{ objectKeys(game.players).length < 5 ? 'Need Min 5 Players' : 'Start Game' }}
                                 </button>
@@ -87,18 +125,35 @@ import { FormsModule } from "@angular/forms";
     `,
     imports: [CommonModule, FormsModule]
 })
-export class LobbyComponent {
+export class LobbyComponent implements OnInit {
     authService = inject(AuthService);
     gameService = inject(GameService);
     startGameError = signal<string | null>(null);
 
+    // Role selection properties
+    includeDuke = signal<boolean>(true); // Duke is included by default
+    includeSupportManager = signal<boolean>(false);
+    includeNerlin = signal<boolean>(false);
+    includeDevSlayer = signal<boolean>(false);
+
     objectKeys = Object.keys;
+
+    ngOnInit() {
+        // Initialize role selection based on current game settings if available
+        const game = this.gameService.currentGame();
+        if (game && game.settings.optionalRoles) {
+            this.includeDuke.set(game.settings.optionalRoles.includeDuke);
+            this.includeSupportManager.set(game.settings.optionalRoles.includeSupportManager);
+            this.includeNerlin.set(game.settings.optionalRoles.includeNerlin);
+            this.includeDevSlayer.set(game.settings.optionalRoles.includeDevSlayer);
+        }
+    }
 
     getPlayerColor(playerId: string): string {
         let hash = 0;
         for (let i = 0; i < playerId.length; i++) {
             hash = playerId.charCodeAt(i) + ((hash << 5) - hash);
-            hash = hash & hash; 
+            hash = hash & hash;
         }
         const color = Math.abs(hash).toString(16).substring(0, 6);
         return "000000".substring(0, 6 - color.length) + color;
@@ -107,6 +162,15 @@ export class LobbyComponent {
     async handleStartGame() {
         this.startGameError.set(null);
         try {
+            // First update the game settings with the selected roles
+            await this.gameService.updateGameSettings({
+                includeDuke: this.includeDuke(),
+                includeSupportManager: this.includeSupportManager(),
+                includeNerlin: this.includeNerlin(),
+                includeDevSlayer: this.includeDevSlayer()
+            });
+
+            // Then start the game
             await this.gameService.startGame();
         } catch (error: any) {
             this.startGameError.set(error.message || "Failed to start game.");

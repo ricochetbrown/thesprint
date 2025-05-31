@@ -135,7 +135,7 @@ import { FormsModule } from "@angular/forms";
                                 <div>
                                     <p class="mb-2">Team on mission: <span class="font-bold">{{ getMissionTeamNames(game) }}</span></p>
                                     @if (isPlayerOnMission(game)) {
-                                        <p class="mb-4">Play your card (Approve/Request).</p>
+                                        <p class="mb-4">Play your card (Approve/Request Changes).</p>
                                         <div class="flex gap-4">
                                             <button (click)="gameService.submitMissionCard('approve')"
                                                     [disabled]="!!game.mission?.cardsPlayed?.[authService.userId()!]"
@@ -144,13 +144,8 @@ import { FormsModule } from "@angular/forms";
                                             </button>
                                             <button (click)="gameService.submitMissionCard('request')"
                                                     [disabled]="!!game.mission?.cardsPlayed?.[authService.userId()!]"
-                                                    class="bg-green-600 p-4 rounded w-24 h-32 disabled:opacity-50 disabled:cursor-not-allowed">
-                                                APPROVE
-                                            </button>
-                                            <button (click)="gameService.submitMissionCard('request')"
-                                                    [disabled]="!!game.mission?.cardsPlayed?.[authService.userId()!]"
                                                     class="bg-red-600 p-4 rounded w-24 h-32 disabled:opacity-50 disabled:cursor-not-allowed">
-                                                REQUEST
+                                                REQUEST CHANGES
                                             </button>
                                         </div>
                                         <p class="mt-4 text-sm">

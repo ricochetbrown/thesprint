@@ -59,9 +59,9 @@ export class GameService {
                                 playerId.startsWith(gameId + '-AI-') && !game.mission?.cardsPlayed?.[playerId]
                             );
 
-                            // Make each AI player play a card
-                            for (const aiPlayerId of aiPlayersOnMission) {
-                                this.aiSubmitMissionCardForPlayer(aiPlayerId);
+                            // If there are AI players who need to play cards, handle all cards in a single update
+                            if (aiPlayersOnMission.length > 0) {
+                                this.submitAllAIMissionCards(aiPlayersOnMission);
                             }
                         }
 
@@ -662,67 +662,84 @@ export class GameService {
     }
 
 
-    async aiSubmitMissionCardForPlayer(aiPlayerId: string): Promise<void> {
+    // New method to submit all AI mission cards in a single update
+    async submitAllAIMissionCards(aiPlayerIds: string[]): Promise<void> {
         const gameId = this.activeGameId();
         const game = this.currentGame();
 
-        if (!gameId || !game) {
-            return; // No active game
+        if (!gameId || !game || !game.mission) {
+            return; // No active game or no mission
         }
 
-        // Check if the player is an AI, on the mission team, and hasn't played a card yet
-        if (!aiPlayerId.startsWith(gameId + '-AI-') ||
-            game.status !== 'mission' ||
-            !game.mission?.team?.includes(aiPlayerId) ||
-            game.mission?.cardsPlayed?.[aiPlayerId]) {
-            return; // Not an AI or not on mission or not in mission phase or already played
+        // Collect cards for all AI players
+        const cards: {[playerId: string]: 'approve' | 'request'} = {};
+        const gameLogEntries: {timestamp: Date, message: string}[] = [];
+
+        for (const aiPlayerId of aiPlayerIds) {
+            // Skip if player is not an AI, not on mission, or has already played
+            if (!aiPlayerId.startsWith(gameId + '-AI-') ||
+                game.status !== 'mission' ||
+                !game.mission.team?.includes(aiPlayerId) ||
+                game.mission.cardsPlayed?.[aiPlayerId]) {
+                continue;
+            }
+
+            // Determine the card to play based on AI role
+            const aiRole = game.roles?.[aiPlayerId];
+            let card: 'approve' | 'request' = 'approve'; // Default to approve for Dexter
+
+            // Sinister roles typically play 'request'
+            if (aiRole === 'SinisterSpy' || aiRole === 'Sniper') {
+                card = 'request';
+            }
+
+            // Special case for Duke (Loyal Dexter) - must approve
+            if (aiRole === 'Duke' || aiRole === 'LoyalDexter') {
+                card = 'approve';
+            }
+
+            console.log(`AI ${aiPlayerId} (${aiRole}) playing mission card: ${card}`);
+
+            // Add card to the collection
+            cards[aiPlayerId] = card;
+
+            // Add log entry
+            gameLogEntries.push({
+                timestamp: new Date(),
+                message: `${game.players[aiPlayerId]?.name || 'AI Player'} played a card.`
+            });
         }
 
-        // Determine the card to play based on AI role
-        const aiRole = game.roles?.[aiPlayerId];
-        let card: 'approve' | 'request' = 'approve'; // Default to approve for Dexter
-
-        // Sinister roles typically play 'request'
-        if (aiRole === 'SinisterSpy' || aiRole === 'Sniper') {
-            card = 'request';
-        }
-
-        // Special case for Duke (Loyal Dexter) - must approve
-        if (aiRole === 'Duke' || aiRole === 'LoyalDexter') {
-             card = 'approve';
-        }
-
-        console.log(`AI ${aiPlayerId} (${aiRole}) playing mission card: ${card}`);
-
-        // Record the card directly in Firebase without using submitMissionCard
-        if (!game.mission) {
-            console.error(`No mission object found for game ${gameId}`);
+        // If no cards were collected, return
+        if (Object.keys(cards).length === 0) {
             return;
         }
 
+        // Combine with existing cards
         const updatedCardsPlayed = {
             ...(game.mission.cardsPlayed || {}),
-            [aiPlayerId]: card
-        };
-
-        const gameLogEntry = {
-            timestamp: new Date(),
-            message: `${game.players[aiPlayerId]?.name || 'AI Player'} played a card.`
+            ...cards
         };
 
         try {
+            // Update Firebase with all cards in a single update
             await this.firestoreService.updateDocument('games', gameId, {
                 'mission.cardsPlayed': updatedCardsPlayed,
-                gameLog: [...(game.gameLog || []), gameLogEntry]
+                gameLog: [...(game.gameLog || []), ...gameLogEntries]
             }, true);
 
-            console.log(`AI ${aiPlayerId} mission card recorded successfully`);
+            console.log(`All AI mission cards recorded successfully`);
 
             // Check if all players on the mission have played their cards
             this.checkIfAllCardsPlayed(game, updatedCardsPlayed);
         } catch (error) {
-            console.error(`Error when AI ${aiPlayerId} tried to play a mission card:`, error);
+            console.error(`Error when submitting AI mission cards:`, error);
         }
+    }
+
+    // Keep for backward compatibility, but modify to use the batch method
+    async aiSubmitMissionCardForPlayer(aiPlayerId: string): Promise<void> {
+        this.submitAllAIMissionCards([aiPlayerId]);
     }
 
     // Keep the original method for backward compatibility

@@ -731,7 +731,9 @@ export class GameService {
             console.log(`All AI mission cards recorded successfully`);
 
             // Check if all players on the mission have played their cards
-            this.checkIfAllCardsPlayed(game, updatedCardsPlayed);
+            // Create a copy of the game with updated cards played for proper mission completion check
+            const updatedGame = { ...game, mission: { ...game.mission, cardsPlayed: updatedCardsPlayed } };
+            this.checkIfAllCardsPlayed(updatedGame, updatedCardsPlayed);
         } catch (error) {
             console.error(`Error when submitting AI mission cards:`, error);
         }
@@ -795,7 +797,9 @@ export class GameService {
         }, true);
 
         // Check if all players on the mission have played their cards
-        this.checkIfAllCardsPlayed(game, updatedCardsPlayed);
+        // Create a copy of the game with updated cards played for proper mission completion check
+        const updatedGame = { ...game, mission: { ...game.mission, cardsPlayed: updatedCardsPlayed } };
+        this.checkIfAllCardsPlayed(updatedGame, updatedCardsPlayed);
     }
 
     // Helper method to check if all players on the mission have played their cards

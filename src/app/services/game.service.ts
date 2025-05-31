@@ -980,13 +980,20 @@ export class GameService {
             console.log("checkIfAllCardsPlayed: Current game status", latestGame.status);
             console.log("checkIfAllCardsPlayed: Updating game state to", nextStatus);
             try {
-                await this.firestoreService.updateDocument('games', gameId, {
+                // Create update object without winner field
+                const updateData: any = {
                     status: nextStatus,
                     storyResults: storyResults,
-                    winner: winner,
                     mission: { ...latestGame.mission, cardsPlayed: combinedCardsPlayed },
                     gameLog: [...(latestGame.gameLog || []), { timestamp: new Date(), message: additionalLogMessage }],
-                }, true);
+                };
+
+                // Only add winner field if it's defined
+                if (winner !== undefined) {
+                    updateData.winner = winner;
+                }
+
+                await this.firestoreService.updateDocument('games', gameId, updateData, true);
                 console.log("checkIfAllCardsPlayed: Game state updated successfully");
 
                 // Verify the game state was updated correctly
@@ -1046,14 +1053,21 @@ export class GameService {
 
             console.log("nextRound: Game over, winner is", winner);
             try {
+                // Create update object without winner field
+                const updateData: any = {
+                    status: 'gameOver',
+                    gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: `All stories played. Game over! ${winner ? winner.toUpperCase() + ' wins!' : ''}` }],
+                };
+
+                // Only add winner field if it's defined
+                if (winner !== undefined) {
+                    updateData.winner = winner;
+                }
+
                 await this.firestoreService.updateDocument(
                     'games',
                     gameId,
-                    {
-                        status: 'gameOver',
-                        winner: winner,
-                        gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: `All stories played. Game over! ${winner ? winner.toUpperCase() + ' wins!' : ''}` }],
-                    },
+                    updateData,
                     true
                 );
                 console.log("nextRound: Game state updated to gameOver");

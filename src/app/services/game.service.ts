@@ -853,6 +853,7 @@ export class GameService {
                 status: nextStatus,
                 storyResults: storyResults,
                 winner: winner,
+                mission: { ...game.mission, cardsPlayed: updatedCardsPlayed },
                 gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: additionalLogMessage }],
             }, true);
         }

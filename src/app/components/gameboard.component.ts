@@ -162,7 +162,7 @@ import { FormsModule } from "@angular/forms";
                             }
                             @case ('results') {
                                 <div>
-                                @if (game.storyResults && (game.currentStoryNum ?? 1) > 1) {
+                                @if (game.storyResults && game.storyResults[(game.currentStoryNum ?? 1) - 1] !== null) {
                                     @if (game.storyResults[(game.currentStoryNum ?? 1) - 1] === 'dexter') {
                                         <p class="text-xl font-bold text-green-400 mb-4">User Story OD-{{ (game.currentStoryNum ?? 1) }} Succeeded!</p>
                                     } @else if (game.storyResults[(game.currentStoryNum ?? 1) - 1] === 'sinister') {

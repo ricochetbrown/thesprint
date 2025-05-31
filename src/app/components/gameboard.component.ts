@@ -143,13 +143,21 @@ import { FormsModule } from "@angular/forms";
                                         <div class="flex gap-4">
                                             <button (click)="gameService.submitMissionCard('approve')"
                                                     [disabled]="!!game.mission?.cardsPlayed?.[authService.userId()!]"
-                                                    class="bg-green-600 p-4 rounded w-24 h-32 disabled:opacity-50 disabled:cursor-not-allowed">
-                                                APPROVE
+                                                    class="p-4 rounded w-24 h-32 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center"
+                                                    style="background-image: url('assets/cardback_texture.png'); background-size: cover; color: white; text-shadow: 1px 1px 2px black;">
+                                                <div class="mb-2">
+                                                    <img [src]="getPlayerAvatarUrl(authService.userId()!, game)" alt="Character" class="w-12 h-12 rounded-full">
+                                                </div>
+                                                <div class="font-bold">APPROVE</div>
                                             </button>
                                             <button (click)="gameService.submitMissionCard('request')"
                                                     [disabled]="!!game.mission?.cardsPlayed?.[authService.userId()!]"
-                                                    class="bg-red-600 p-4 rounded w-24 h-32 disabled:opacity-50 disabled:cursor-not-allowed">
-                                                REQUEST CHANGES
+                                                    class="p-4 rounded w-24 h-32 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center"
+                                                    style="background-image: url('assets/cardback_texture.png'); background-size: cover; color: white; text-shadow: 1px 1px 2px black;">
+                                                <div class="mb-2">
+                                                    <img [src]="getPlayerAvatarUrl(authService.userId()!, game)" alt="Character" class="w-12 h-12 rounded-full">
+                                                </div>
+                                                <div class="font-bold">REQUEST CHANGES</div>
                                             </button>
                                         </div>
                                         <p class="mt-4 text-sm">
@@ -388,36 +396,46 @@ export class GameBoardComponent {
     getPlayerAvatarUrl(playerId: string, game: Game): string {
         const myId = this.authService.userId();
 
+        // If this is the current player's avatar, show their own image based on their role
+        if (playerId === myId && game.roles && myId && game.roles[myId]) {
+            const myRole = game.roles[myId];
+
+            // Return appropriate image based on role
+            if (myRole === 'Duke') {
+                return "assets/the_duke.png";
+            } else if (myRole === 'SupportManager') {
+                return "assets/support_manager.png";
+            } else if (myRole === 'Nerlin') {
+                return "assets/nerlin.png";
+            } else if (myRole === 'DevSlayer') {
+                return "assets/dev_slayer.png";
+            } else if (myRole === 'SinisterSpy') {
+                return "assets/sinister.png";
+            } else if (myRole === 'LoyalDexter') {
+                return "assets/technicalowner.png";
+            } else {
+                // Default for any other roles
+                return "assets/dexter.png";
+            }
+        }
+
+        // For other players' avatars
         if (game.roles && myId && game.roles[myId]) {
             const myRole = game.roles[myId];
             const playerRole = game.roles[playerId];
 
-            // Check if the player is a Duke
-            if (playerRole === 'Duke') {
-                // Return a placeholder image for Duke
-                return "https://via.placeholder.com/40/4B0082/FFFFFF?Text=Duke";
-            }
-
             // Support Manager sees Dev Slayer as Duke
             if (myRole === 'SupportManager' && playerRole === 'DevSlayer') {
-                return "https://via.placeholder.com/40/4B0082/FFFFFF?Text=Duke";
+                return "assets/the_duke.png";
             }
 
-            // Special avatars for new roles
-            if (playerRole === 'SupportManager') {
-                return "https://via.placeholder.com/40/008080/FFFFFF?Text=SM"; // Teal color for Support Manager
-            }
-
-            if (playerRole === 'Nerlin') {
-                return "https://via.placeholder.com/40/800080/FFFFFF?Text=N"; // Purple color for Nerlin
-            }
-
-            if (playerRole === 'DevSlayer') {
-                return "https://via.placeholder.com/40/8B0000/FFFFFF?Text=DS"; // Dark red color for Dev Slayer
+            // Support Manager sees Duke as Duke
+            if (myRole === 'SupportManager' && playerRole === 'Duke') {
+                return "assets/the_duke.png";
             }
         }
 
-        // Default placeholder image with color based on player ID
-        return `https://via.placeholder.com/40/${this.getPlayerColor(playerId)}/FFFFFF?Text=${game.players[playerId].name.substring(0,1).toUpperCase() || 'P'}`;
+        // For all other players, show dexter.png
+        return "assets/dexter.png";
     }
 }

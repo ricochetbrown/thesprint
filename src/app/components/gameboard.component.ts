@@ -28,12 +28,16 @@ import { FormsModule } from "@angular/forms";
                             <div class="p-2 rounded-full text-center w-20 h-20 md:w-24 md:h-24 flex flex-col justify-center items-center border-2"
                                  [ngClass]="{
                                     'border-yellow-400 shadow-yellow-400/50 shadow-lg': playerId === game.currentTO_id,
-                                    'border-gray-600': playerId !== game.currentTO_id
+                                    'border-gray-600': playerId !== game.currentTO_id,
+                                    'border-indigo-600 shadow-indigo-400/50 shadow-lg': isPlayerDukeForSupportManager(playerId, game)
                                  }">
                                 <img [src]="getPlayerAvatarUrl(playerId, game)" alt="P" class="w-8 h-8 md:w-10 md:h-10 rounded-full mb-1">
                                 <span class="text-xs md:text-sm truncate w-full">{{ game.players[playerId].name }}</span>
                                 @if (playerId === authService.userId()) {
                                     <span class="text-xs text-yellow-300">(You)</span>
+                                }
+                                @if (isPlayerDukeForSupportManager(playerId, game)) {
+                                    <span class="text-xs text-indigo-300 font-bold">(Duke)</span>
                                 }
                             </div>
                         }
@@ -159,10 +163,10 @@ import { FormsModule } from "@angular/forms";
                             @case ('results') {
                                 <div>
                                 @if (game.storyResults && (game.currentStoryNum ?? 1) > 1) {
-                                    @if (game.storyResults[(game.currentStoryNum ?? 1) - 2] === 'dexter') {
-                                        <p class="text-xl font-bold text-green-400 mb-4">User Story OD-{{ (game.currentStoryNum ?? 1) - 1 }} Succeeded!</p>
-                                    } @else if (game.storyResults[(game.currentStoryNum ?? 1) - 2] === 'sinister') {
-                                        <p class="text-xl font-bold text-red-400 mb-4">User Story OD-{{ (game.currentStoryNum ?? 1) - 1 }} Failed!</p>
+                                    @if (game.storyResults[(game.currentStoryNum ?? 1) - 1] === 'dexter') {
+                                        <p class="text-xl font-bold text-green-400 mb-4">User Story OD-{{ (game.currentStoryNum ?? 1) }} Succeeded!</p>
+                                    } @else if (game.storyResults[(game.currentStoryNum ?? 1) - 1] === 'sinister') {
+                                        <p class="text-xl font-bold text-red-400 mb-4">User Story OD-{{ (game.currentStoryNum ?? 1) }} Failed!</p>
                                     }
                                 } @else {
                                     <p class="mb-2">Processing results...</p>
@@ -330,7 +334,7 @@ export class GameBoardComponent {
         if (role === 'Sniper') return "Sinister. If Dexter wins, you can snipe the Duke.";
         if (role === 'SinisterSpy') return "Sinister. Cause User Stories to fail. Can Approve/Request.";
         if (role === 'LoyalDexter') return "Dexter. Help User Stories succeed. Must Approve.";
-        if (role === 'SupportManager') return "Dexter. You know who the Duke is. Protect the Duke's identity.";
+        if (role === 'SupportManager') return "Dexter. You can see who the Duke is (highlighted with indigo border and labeled). Protect the Duke's identity.";
         if (role === 'Nerlin') return "Sinister. Your identity is hidden from the Duke.";
         if (role === 'DevSlayer') return "Sinister. You appear as the Duke to the Support Manager.";
         return "Your objective will be revealed.";
@@ -363,6 +367,22 @@ export class GameBoardComponent {
 
     nextRound(): void {
         this.gameService.nextRound();
+    }
+
+    isPlayerDukeForSupportManager(playerId: string, game: Game): boolean {
+        const myId = this.authService.userId();
+
+        if (game.roles && myId && game.roles[myId]) {
+            const myRole = game.roles[myId];
+            const playerRole = game.roles[playerId];
+
+            // Check if current player is Support Manager and target is Duke or Dev Slayer
+            if (myRole === 'SupportManager' && (playerRole === 'Duke' || playerRole === 'DevSlayer')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     getPlayerAvatarUrl(playerId: string, game: Game): string {

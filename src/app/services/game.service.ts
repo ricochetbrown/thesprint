@@ -677,12 +677,17 @@ export class GameService {
 
     // New method to submit all AI mission cards in a single update
     async submitAllAIMissionCards(aiPlayerIds: string[]): Promise<void> {
+        console.log("submitAllAIMissionCards: Starting with AI players", aiPlayerIds);
         const gameId = this.activeGameId();
         const game = this.currentGame();
 
         if (!gameId || !game || !game.mission) {
+            console.log("submitAllAIMissionCards: No active game or no mission");
             return; // No active game or no mission
         }
+
+        console.log("submitAllAIMissionCards: Game status", game.status);
+        console.log("submitAllAIMissionCards: Mission team", game.mission.team);
 
         // Collect cards for all AI players
         const cards: {[playerId: string]: 'approve' | 'request'} = {};
@@ -694,6 +699,7 @@ export class GameService {
                 game.status !== 'mission' ||
                 !game.mission.team?.includes(aiPlayerId) ||
                 game.mission.cardsPlayed?.[aiPlayerId]) {
+                console.log(`submitAllAIMissionCards: Skipping AI player ${aiPlayerId}`);
                 continue;
             }
 
@@ -711,7 +717,7 @@ export class GameService {
                 card = 'approve';
             }
 
-            console.log(`AI ${aiPlayerId} (${aiRole}) playing mission card: ${card}`);
+            console.log(`submitAllAIMissionCards: AI ${aiPlayerId} (${aiRole}) playing mission card: ${card}`);
 
             // Add card to the collection
             cards[aiPlayerId] = card;
@@ -725,6 +731,7 @@ export class GameService {
 
         // If no cards were collected, return
         if (Object.keys(cards).length === 0) {
+            console.log("submitAllAIMissionCards: No cards to play");
             return;
         }
 
@@ -733,22 +740,26 @@ export class GameService {
             ...(game.mission.cardsPlayed || {}),
             ...cards
         };
+        console.log("submitAllAIMissionCards: Updated cards played", updatedCardsPlayed);
 
         try {
             // Update Firebase with all cards in a single update
+            console.log("submitAllAIMissionCards: Updating database with cards");
             await this.firestoreService.updateDocument('games', gameId, {
                 'mission.cardsPlayed': updatedCardsPlayed,
                 gameLog: [...(game.gameLog || []), ...gameLogEntries]
             }, true);
 
-            console.log(`All AI mission cards recorded successfully`);
+            console.log("submitAllAIMissionCards: Database updated successfully");
 
             // Check if all players on the mission have played their cards
             // Create a copy of the game with updated cards played for proper mission completion check
+            console.log("submitAllAIMissionCards: Checking if all cards played");
             const updatedGame = { ...game, mission: { ...game.mission, cardsPlayed: updatedCardsPlayed } };
             await this.checkIfAllCardsPlayed(updatedGame, updatedCardsPlayed);
+            console.log("submitAllAIMissionCards: Completed");
         } catch (error) {
-            console.error(`Error when submitting AI mission cards:`, error);
+            console.error("submitAllAIMissionCards: Error updating database", error);
         }
     }
 
@@ -777,51 +788,88 @@ export class GameService {
     }
 
     async submitMissionCard(card: 'approve' | 'request'): Promise<void> {
+        console.log("submitMissionCard: Starting with card", card);
         const gameId = this.activeGameId();
         const game = this.currentGame();
         const currentUserId = this.authService.userId();
 
         if (!gameId || !game || !currentUserId) {
+            console.error("submitMissionCard: Game or user not available");
             throw new Error("Game or user not available.");
         }
 
+        console.log("submitMissionCard: Game status", game.status);
+        console.log("submitMissionCard: Mission team", game.mission?.team);
+        console.log("submitMissionCard: Current user", currentUserId);
+
         // 1. Check if the current game status is 'mission' and if the current user is on the mission team.\n
         if (game.status !== 'mission' || !game.mission?.team.includes(currentUserId)) {
+            console.error("submitMissionCard: Not on mission or game not in mission phase");
             throw new Error("Not on a mission or game not in mission phase.");
         }
 
         // Prevent playing multiple cards
         if (game.mission.cardsPlayed?.[currentUserId]) {
-             console.log("User already played a card for this mission.");
+             console.log("submitMissionCard: User already played a card for this mission");
              return; // Or throw an error if preferred
         }
 
         // 3. Record the current user's card\n
         const updatedCardsPlayed = { ...game.mission?.cardsPlayed, [currentUserId]: card };
+        console.log("submitMissionCard: Updated cards played", updatedCardsPlayed);
 
         const gameLogEntry = {
             timestamp: new Date(),
             message: `${game.players[currentUserId]?.name || 'Player'} played a card.`
         };
 
-        await this.firestoreService.updateDocument('games', gameId, {
-            'mission.cardsPlayed': updatedCardsPlayed,
-            gameLog: [...(game.gameLog || []), gameLogEntry]
-        }, true);
+        console.log("submitMissionCard: Updating database with card");
+        try {
+            await this.firestoreService.updateDocument('games', gameId, {
+                'mission.cardsPlayed': updatedCardsPlayed,
+                gameLog: [...(game.gameLog || []), gameLogEntry]
+            }, true);
+            console.log("submitMissionCard: Database updated successfully");
+        } catch (error) {
+            console.error("submitMissionCard: Error updating database", error);
+            throw error;
+        }
 
         // Check if all players on the mission have played their cards
         // Create a copy of the game with updated cards played for proper mission completion check
+        console.log("submitMissionCard: Checking if all cards played");
         const updatedGame = { ...game, mission: { ...game.mission, cardsPlayed: updatedCardsPlayed } };
         await this.checkIfAllCardsPlayed(updatedGame, updatedCardsPlayed);
+        console.log("submitMissionCard: Completed");
     }
 
     // Helper method to check if all players on the mission have played their cards
     private async checkIfAllCardsPlayed(game: Game, updatedCardsPlayed: {[playerId: string]: 'approve' | 'request'}): Promise<void> {
         const gameId = this.activeGameId();
-        if (!gameId || !game || !game.mission?.team) return;
+        if (!gameId || !game || !game.mission?.team) {
+            console.log("checkIfAllCardsPlayed: Missing gameId, game, or mission team");
+            return;
+        }
+
+        // Get the latest game state to ensure we're working with the most up-to-date data
+        const latestGame = await this.firestoreService.getDocument<Game>('games', gameId, true);
+        if (!latestGame) {
+            console.log("checkIfAllCardsPlayed: Could not fetch latest game state");
+            return;
+        }
+
+        // If the game is already in 'results' or 'gameOver' state, don't process again
+        if (latestGame.status === 'results' || latestGame.status === 'gameOver') {
+            console.log("checkIfAllCardsPlayed: Game already in", latestGame.status, "state, not processing again");
+            return;
+        }
 
         const missionTeam = game.mission.team;
         const allPlayed = missionTeam.every(playerId => updatedCardsPlayed.hasOwnProperty(playerId));
+
+        console.log("checkIfAllCardsPlayed: Mission team:", missionTeam);
+        console.log("checkIfAllCardsPlayed: Cards played:", updatedCardsPlayed);
+        console.log("checkIfAllCardsPlayed: All played:", allPlayed);
 
         // If all players on the mission have played their cards, process the results
         if (allPlayed) {
@@ -862,27 +910,54 @@ export class GameService {
                 additionalLogMessage += ` Sinister has won ${sinisterWins} stories and wins the game!`;
             }
 
-            await this.firestoreService.updateDocument('games', gameId, {
-                status: nextStatus,
-                storyResults: storyResults,
-                winner: winner,
-                mission: { ...game.mission, cardsPlayed: updatedCardsPlayed },
-                gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: additionalLogMessage }],
-            }, true);
+            console.log("checkIfAllCardsPlayed: Current game status", game.status);
+            console.log("checkIfAllCardsPlayed: Updating game state to", nextStatus);
+            try {
+                await this.firestoreService.updateDocument('games', gameId, {
+                    status: nextStatus,
+                    storyResults: storyResults,
+                    winner: winner,
+                    mission: { ...game.mission, cardsPlayed: updatedCardsPlayed },
+                    gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: additionalLogMessage }],
+                }, true);
+                console.log("checkIfAllCardsPlayed: Game state updated successfully");
+
+                // Verify the game state was updated correctly
+                const updatedGame = await this.firestoreService.getDocument<Game>('games', gameId, true);
+                console.log("checkIfAllCardsPlayed: Updated game status", updatedGame?.status);
+            } catch (error) {
+                console.error("checkIfAllCardsPlayed: Error updating game state", error);
+            }
         }
     }
 
     async nextRound(): Promise<void> {
+        console.log("nextRound: Starting");
         const gameId = this.activeGameId();
         const game = this.currentGame();
 
-        if (!gameId || !game || game.status !== 'results' || game.winner) {
-            // Only proceed if in results phase and game is not over
+        console.log("nextRound: Game status", game?.status);
+        console.log("nextRound: Game winner", game?.winner);
+
+        if (!gameId || !game) {
+            console.log("nextRound: No active game or game data");
+            return;
+        }
+
+        if (game.status !== 'results') {
+            console.log("nextRound: Game not in results phase, current status:", game.status);
+            return;
+        }
+
+        if (game.winner) {
+            console.log("nextRound: Game already has a winner:", game.winner);
             return;
         }
 
         const currentStoryNum = (game.currentStoryNum ?? 0) + 1;
         const totalStories = game.storiesTotal ?? 5;
+
+        console.log("nextRound: Current story", currentStoryNum, "of", totalStories);
 
         if (currentStoryNum > totalStories) {
             // Handle end of game if all stories are played
@@ -890,6 +965,8 @@ export class GameService {
             let winner: 'dexter' | 'sinister' | undefined = undefined;
             const dexterWins = game.storyResults?.filter(r => r === 'dexter').length ?? 0;
             const sinisterWins = game.storyResults?.filter(r => r === 'sinister').length ?? 0;
+
+            console.log("nextRound: Dexter wins", dexterWins, "Sinister wins", sinisterWins);
 
             if (dexterWins > sinisterWins) {
                 // Dexter wins unless there's an assassination phase
@@ -900,16 +977,22 @@ export class GameService {
                  winner = 'sinister';
             }
 
-            await this.firestoreService.updateDocument(
-                'games',
-                gameId,
-                {
-                    status: 'gameOver',
-                    winner: winner,
-                    gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: `All stories played. Game over! ${winner ? winner.toUpperCase() + ' wins!' : ''}` }],
-                },
-                true
-            );
+            console.log("nextRound: Game over, winner is", winner);
+            try {
+                await this.firestoreService.updateDocument(
+                    'games',
+                    gameId,
+                    {
+                        status: 'gameOver',
+                        winner: winner,
+                        gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: `All stories played. Game over! ${winner ? winner.toUpperCase() + ' wins!' : ''}` }],
+                    },
+                    true
+                );
+                console.log("nextRound: Game state updated to gameOver");
+            } catch (error) {
+                console.error("nextRound: Error updating game state to gameOver", error);
+            }
 
         } else {
             // Move to the next round
@@ -918,21 +1001,28 @@ export class GameService {
             const nextTOIndex = (currentTOIndex + 1) % playerIds.length;
             const nextTOId = playerIds[nextTOIndex];
 
-            await this.firestoreService.updateDocument(
-                'games',
-                gameId,
-                {
-                    currentStoryNum: currentStoryNum,
-                    currentTO_id: nextTOId,
-                    voteFailsThisRound: 0,
-                    teamVote: null, // Clear previous team vote data
-                    mission: null, // Clear previous mission data
-                    status: 'teamProposal', // Start the next round with team proposal
-                    gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: `Starting User Story #${currentStoryNum}. ${game.players[nextTOId]?.name || 'Next Team Leader'} is the Team Leader.` }],
-                },
-                true
-            );
+            console.log("nextRound: Moving to next round, next TO is", nextTOId);
+            try {
+                await this.firestoreService.updateDocument(
+                    'games',
+                    gameId,
+                    {
+                        currentStoryNum: currentStoryNum,
+                        currentTO_id: nextTOId,
+                        voteFailsThisRound: 0,
+                        teamVote: null, // Clear previous team vote data
+                        mission: null, // Clear previous mission data
+                        status: 'teamProposal', // Start the next round with team proposal
+                        gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: `Starting User Story #${currentStoryNum}. ${game.players[nextTOId]?.name || 'Next Team Leader'} is the Team Leader.` }],
+                    },
+                    true
+                );
+                console.log("nextRound: Game state updated to teamProposal for next round");
+            } catch (error) {
+                console.error("nextRound: Error updating game state for next round", error);
+            }
         }
+        console.log("nextRound: Completed");
     }
 
 }

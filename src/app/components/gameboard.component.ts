@@ -34,7 +34,7 @@ import { FormsModule } from "@angular/forms";
                                     <img [src]="getPlayerAvatarUrl(playerId, game)" alt="P" class="w-16 h-16 md:w-20 md:h-20 rounded-full">
                                     <!-- Technical Owner overlay -->
                                     @if (playerId === game.currentTO_id) {
-                                        <img src="assets/technicalowner.png" alt="TO" class="absolute top-0 right-0 w-12 h-12 md:w-14 md:h-14">
+                                        <img src="assets/technicalowner.png" alt="TO" class="absolute" style="width: 5rem; height: 5rem; top: -30px; right: -20px;">
                                     }
                                     <!-- Team member overlay (for both proposed and approved teams) -->
                                     @if (game.mission?.team?.includes(playerId) || game.teamVote?.proposedTeam?.includes(playerId)) {

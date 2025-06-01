@@ -222,7 +222,7 @@ export class GameService {
         this.activeGameId.set(null);
     }
 
-    async updateGameSettings(optionalRoles: { includeDuke: boolean, includeSupportManager: boolean, includeNerlin: boolean, includeDevSlayer: boolean }): Promise<void> {
+    async updateGameSettings(optionalRoles: { includeDuke: boolean, includeSupportManager: boolean, includeNerlin: boolean, includeDevSlayer: boolean, includeSniper: boolean }): Promise<void> {
         const gameId = this.activeGameId();
         const game = this.currentGame();
         const currentUserId = this.authService.userId();

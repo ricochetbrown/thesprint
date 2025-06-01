@@ -24,6 +24,11 @@ export interface Game {
     managementDeck?: string[]; // Array of management card types
     managementDesignatedPlayer?: string; // Player ID designated to receive a management card
     managementPhase?: boolean; // Whether we're in the management phase (between Grooming and Review)
+    playedManagementCard?: {
+        cardId: string;       // ID of the played card (e.g., 'po', 'ceo')
+        playedBy: string;     // Player ID who played the card
+        playedAt: Timestamp;  // When the card was played
+    };
     createdAt: Timestamp;
     updatedAt: Timestamp;
     currentTO_id?: string; // Technical Owner ID

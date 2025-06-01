@@ -4,6 +4,7 @@ import { AuthService } from "../services/auth.service";
 import { GameService } from "../services/game.service";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
+import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
 
 // --- Game Board Component (Very Basic Stub) ---
 @Component({
@@ -42,7 +43,7 @@ import { FormsModule } from "@angular/forms";
                                     }
                                     <!-- Management designated player overlay -->
                                     @if (playerId === game.managementDesignatedPlayer) {
-                                        <img src="assets/guido.png" alt="Management" class="absolute top-0 left-0 w-8 h-8 md:w-10 md:h-10">
+                                        <img src="assets/guido.png" alt="Management" class="absolute top-[-10px] h-[4rem] w-[2rem]">
                                     }
                                 </div>
                                 <div class="text-center">
@@ -258,6 +259,24 @@ import { FormsModule } from "@angular/forms";
                             }
                         }
                     </div>
+
+                    <!-- Played Management Card Section -->
+                    @if (getPlayedManagementCard(game)) {
+                        <div class="bg-purple-800 bg-opacity-80 p-4 rounded-lg mt-4 mb-4">
+                            <h3 class="text-xl font-bold mb-2">Active Management Card</h3>
+                            <div class="flex flex-col md:flex-row gap-4">
+                                <div class="flex-shrink-0">
+                                    <img [src]="getPlayedManagementCard(game)?.imageUrl"
+                                         alt="Management Card" class="w-16 h-24">
+                                </div>
+                                <div class="flex-grow">
+                                    <h4 class="text-lg font-semibold">{{ getPlayedManagementCard(game)?.title }} - {{ getPlayedManagementCard(game)?.name }}</h4>
+                                    <p class="text-sm mb-2">Played by {{ getPlayedManagementCard(game)?.playedBy }}</p>
+                                    <p class="text-sm">{{ getPlayedManagementCard(game)?.instructions }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    }
 
                     <div class="grid md:grid-cols-2 gap-4 mt-4">
                         <div class="bg-slate-700 bg-opacity-90 p-3 rounded">
@@ -568,5 +587,25 @@ export class GameBoardComponent {
         }
 
         return game.players[playerId].managementCard || null;
+    }
+
+    // Get the details of the played management card
+    getPlayedManagementCard(game: Game) {
+        if (!game.playedManagementCard || !game.playedManagementCard.cardId) {
+            return null;
+        }
+
+        const cardId = game.playedManagementCard.cardId;
+        const cardInfo = MANAGEMENT_CARDS[cardId];
+
+        if (!cardInfo) {
+            return null;
+        }
+
+        return {
+            ...cardInfo,
+            playedBy: game.players[game.playedManagementCard.playedBy]?.name || 'Unknown',
+            playedAt: game.playedManagementCard.playedAt
+        };
     }
 }

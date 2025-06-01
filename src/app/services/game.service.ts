@@ -2,6 +2,7 @@ import { signal, WritableSignal, effect, inject, Injectable } from '@angular/cor
 import { FirestoreService } from './firestore.service';
 import { AuthService } from './auth.service';
 import { serverTimestamp, Unsubscribe, where } from 'firebase/firestore';
+import { MANAGEMENT_CARDS } from '../interfaces/management-card.interface';
 import { Game } from '../interfaces/game.interface';
 import { Player } from '../interfaces/player.interface';
 
@@ -571,9 +572,26 @@ export class GameService {
         const proposedTeam = shuffledPlayers.slice(0, requiredTeamSize); // Select the first 'requiredTeamSize' players
         console.log("aiProposeTeam: Selected team", { requiredTeamSize, proposedTeam });
 
+        // Randomly select a player for management designation (only for stories 1-4)
+        let managementDesignatedPlayerId: string | undefined = undefined;
+        const currentStory = game.currentStoryNum || 1;
+
+        if (currentStory <= 4) {
+            // Get all players who are not on the proposed team
+            const proposedTeamIds = proposedTeam.map(p => p.id);
+            const eligiblePlayers = allPlayers.filter(p => !proposedTeamIds.includes(p.id));
+
+            if (eligiblePlayers.length > 0) {
+                // Randomly select one player from the eligible players
+                const randomIndex = Math.floor(Math.random() * eligiblePlayers.length);
+                managementDesignatedPlayerId = eligiblePlayers[randomIndex].id;
+                console.log("aiProposeTeam: Selected management player", { managementDesignatedPlayerId });
+            }
+        }
+
         try {
-            // Call the proposeTeam() method with the randomly selected team and the AI's user ID
-            await this.proposeTeam(proposedTeam, currentUserId);
+            // Call the proposeTeam() method with the randomly selected team, the AI's user ID, and the management designated player
+            await this.proposeTeam(proposedTeam, currentUserId, managementDesignatedPlayerId);
             console.log("aiProposeTeam: Team proposed successfully");
         } catch (error) {
             console.error("aiProposeTeam: Error proposing team", error);
@@ -656,6 +674,9 @@ export class GameService {
                     // Use setTimeout to ensure this runs after the game state update is processed
                     setTimeout(async () => {
                         await this.submitAllAIMissionCards(aiPlayersOnMission);
+
+                        // Check if any AI players have management cards they can play
+                        await this.aiPlayManagementCard();
 
                         // After AI players have submitted their cards, check if all cards have been played
                         // This is a safety check in case the game state wasn't updated properly
@@ -870,6 +891,11 @@ export class GameService {
                         ],
                         teamVote: null, // Clear the team vote data for the next round
                     }, true);
+
+                    // Check if the designated player is an AI and trigger them to draw a card
+                    setTimeout(async () => {
+                        await this.aiDrawManagementCard();
+                    }, 500);
                 } else {
                     await this.firestoreService.updateDocument('games', gameId, {
                         mission: { team: missionTeam, cardsPlayed: {} },
@@ -926,10 +952,10 @@ export class GameService {
     }
 
     // Function to draw a management card
-    async drawManagementCard(): Promise<void> {
+    async drawManagementCard(overrideUserId?: string): Promise<void> {
         const gameId = this.activeGameId();
         const game = this.currentGame();
-        const currentUserId = this.authService.userId();
+        const currentUserId = overrideUserId || this.authService.userId();
 
         if (!gameId || !game || !currentUserId) {
             throw new Error("Game or user not available.");
@@ -987,6 +1013,34 @@ export class GameService {
         }, true);
     }
 
+    // Function for AI to draw a management card
+    async aiDrawManagementCard(): Promise<void> {
+        console.log("aiDrawManagementCard: Starting");
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+
+        if (!gameId || !game || !game.managementPhase || !game.managementDesignatedPlayer) {
+            console.log("aiDrawManagementCard: No active game or not in management phase");
+            return; // No active game or not in management phase
+        }
+
+        const designatedPlayerId = game.managementDesignatedPlayer;
+
+        // Check if the designated player is an AI
+        if (!designatedPlayerId.startsWith(gameId + '-AI-')) {
+            console.log(`aiDrawManagementCard: Designated player ${designatedPlayerId} is not an AI`);
+            return; // Not an AI
+        }
+
+        // AI decision logic: For now, always draw a card
+        try {
+            console.log(`aiDrawManagementCard: AI ${designatedPlayerId} drawing a card`);
+            await this.drawManagementCard(designatedPlayerId);
+        } catch (error) {
+            console.error(`aiDrawManagementCard: Error drawing card for AI ${designatedPlayerId}:`, error);
+        }
+    }
+
     // Function to skip drawing a management card
     async skipManagementCard(): Promise<void> {
         const gameId = this.activeGameId();
@@ -1017,10 +1071,10 @@ export class GameService {
     }
 
     // Function to play a management card
-    async playManagementCard(): Promise<void> {
+    async playManagementCard(overrideUserId?: string): Promise<void> {
         const gameId = this.activeGameId();
         const game = this.currentGame();
-        const currentUserId = this.authService.userId();
+        const currentUserId = overrideUserId || this.authService.userId();
 
         if (!gameId || !game || !currentUserId) {
             throw new Error("Game or user not available.");
@@ -1037,16 +1091,28 @@ export class GameService {
             throw new Error("You don't have a management card to play.");
         }
 
-        // Check if we're in the right phase to play management cards
-        // Management cards can only be played between the end of the Grooming Phase and the start of the Review Phase
-        if (game.status !== 'mission') {
-            throw new Error("Management cards can only be played between the Grooming Phase and the Review Phase.");
+        const cardId = player.managementCard;
+        const cardInfo = MANAGEMENT_CARDS[cardId];
+
+        if (!cardInfo) {
+            throw new Error(`Unknown management card: ${cardId}`);
+        }
+
+        // Check if we're in the right phase to play this card
+        if (!cardInfo.playablePhases.includes(game.status)) {
+            throw new Error(`The ${cardInfo.title} - ${cardInfo.name} card cannot be played during the ${game.status} phase.`);
+        }
+
+        // Check if we're on the right story to play this card
+        const currentStory = game.currentStoryNum || 1;
+        if (!cardInfo.playableStories.includes(currentStory)) {
+            throw new Error(`The ${cardInfo.title} - ${cardInfo.name} card cannot be played during User Story ${currentStory}.`);
         }
 
         // Add a log entry
         const gameLogEntry = {
             timestamp: new Date(),
-            message: `${player.name} played their ${player.managementCard} management card.`
+            message: `${player.name} played their ${cardInfo.title} - ${cardInfo.name} management card.`
         };
 
         // Update the player's management card (remove it)
@@ -1056,11 +1122,105 @@ export class GameService {
             managementCard: undefined
         };
 
+        // Record the played card
+        const playedCard = {
+            cardId: cardId,
+            playedBy: currentUserId,
+            playedAt: new Date()
+        };
+
+        // Handle specific card effects
+        let additionalUpdates = {};
+
+        if (cardId === 'po') {
+            // "PO" - "Shifting Priorities" card effect:
+            // Switch to the next User Story
+            const nextStory = currentStory + 1;
+            if (nextStory > 5) {
+                throw new Error("Cannot advance beyond the 5th User Story.");
+            }
+
+            // Add log entry for story change
+            gameLogEntry.message += ` Switching to User Story ${nextStory}.`;
+
+            // Update the game state to move to the next story
+            additionalUpdates = {
+                currentStoryNum: nextStory,
+                status: 'teamProposal', // Reset to team proposal phase for the new story
+                mission: null, // Clear the current mission
+                teamVote: null // Clear any team votes
+            };
+        }
+
         // Update the game
         await this.firestoreService.updateDocument('games', gameId, {
             players: updatedPlayers,
-            gameLog: [...(game.gameLog || []), gameLogEntry]
+            playedManagementCard: playedCard,
+            gameLog: [...(game.gameLog || []), gameLogEntry],
+            ...additionalUpdates
         }, true);
+    }
+
+    // Function for AI to play a management card
+    async aiPlayManagementCardForPlayer(aiPlayerId: string): Promise<void> {
+        console.log(`aiPlayManagementCardForPlayer: Starting for AI player ${aiPlayerId}`);
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+
+        if (!gameId || !game) {
+            console.log("aiPlayManagementCardForPlayer: No active game");
+            return; // No active game
+        }
+
+        // Check if the player is an AI, has a management card, and we're in the right phase
+        if (!aiPlayerId.startsWith(gameId + '-AI-') ||
+            !game.players[aiPlayerId]?.managementCard ||
+            game.status !== 'mission') {
+            console.log(`aiPlayManagementCardForPlayer: Skipping AI player ${aiPlayerId}`);
+            return; // Not an AI or no management card or wrong phase
+        }
+
+        const cardId = game.players[aiPlayerId].managementCard;
+        const cardInfo = MANAGEMENT_CARDS[cardId!];
+
+        if (!cardInfo) {
+            console.log(`aiPlayManagementCardForPlayer: Unknown card ${cardId} for AI player ${aiPlayerId}`);
+            return; // Unknown card
+        }
+
+        // Check if the card can be played in the current phase and story
+        const currentStory = game.currentStoryNum || 1;
+        if (!cardInfo.playablePhases.includes(game.status) || !cardInfo.playableStories.includes(currentStory)) {
+            console.log(`aiPlayManagementCardForPlayer: Card ${cardId} cannot be played in phase ${game.status} or story ${currentStory}`);
+            return; // Card cannot be played
+        }
+
+        // AI decision logic: For now, always play the card if it can be played
+        try {
+            console.log(`aiPlayManagementCardForPlayer: AI ${aiPlayerId} playing card ${cardId}`);
+            await this.playManagementCard(aiPlayerId);
+        } catch (error) {
+            console.error(`aiPlayManagementCardForPlayer: Error playing card for AI ${aiPlayerId}:`, error);
+        }
+    }
+
+    // Function to check if any AI players can play management cards
+    async aiPlayManagementCard(): Promise<void> {
+        console.log("aiPlayManagementCard: Starting");
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+
+        if (!gameId || !game) {
+            console.log("aiPlayManagementCard: No active game");
+            return; // No active game
+        }
+
+        // Check all AI players
+        for (const playerId of Object.keys(game.players)) {
+            if (playerId.startsWith(gameId + '-AI-') && game.players[playerId].managementCard) {
+                await this.aiPlayManagementCardForPlayer(playerId);
+            }
+        }
     }
 
 

@@ -38,7 +38,7 @@ import { FormsModule } from "@angular/forms";
                                     }
                                     <!-- Team member overlay (for both proposed and approved teams) -->
                                     @if (game.mission?.team?.includes(playerId) || game.teamVote?.proposedTeam?.includes(playerId)) {
-                                        <img src="assets/thesprint_logo.png" alt="Team" class="absolute top-0 left-0 w-8 h-8 md:w-10 md:h-10">
+                                        <img src="assets/supercoder.png" alt="Team" class="absolute top-0 left-0 w-8 h-8 md:w-10 md:h-10">
                                     }
                                 </div>
                                 <div class="text-center">
@@ -144,21 +144,13 @@ import { FormsModule } from "@angular/forms";
                                         <div class="flex gap-4">
                                             <button (click)="gameService.submitMissionCard('approve')"
                                                     [disabled]="!!game.mission?.cardsPlayed?.[authService.userId()!]"
-                                                    class="p-4 rounded w-24 h-32 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center"
-                                                    style="background-image: url('assets/cardback_texture.png'); background-size: cover; color: white; text-shadow: 1px 1px 2px black;">
-                                                <div class="mb-2">
-                                                    <img [src]="getPlayerAvatarUrl(authService.userId()!, game)" alt="Character" class="w-12 h-12 rounded-full">
-                                                </div>
-                                                <div class="font-bold">APPROVE</div>
+                                                    class="disabled:opacity-50 disabled:cursor-not-allowed">
+                                                <img src="assets/review-approvechanges.png" alt="Approve" class="w-24 h-32">
                                             </button>
                                             <button (click)="gameService.submitMissionCard('request')"
                                                     [disabled]="!!game.mission?.cardsPlayed?.[authService.userId()!] || (game.roles && (game.roles[authService.userId()!] === 'LoyalDexter' || game.roles[authService.userId()!] === 'Duke' || game.roles[authService.userId()!] === 'SupportManager'))"
-                                                    class="p-4 rounded w-24 h-32 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center"
-                                                    style="background-image: url('assets/cardback_texture.png'); background-size: cover; color: white; text-shadow: 1px 1px 2px black;">
-                                                <div class="mb-2">
-                                                    <img [src]="getPlayerAvatarUrl(authService.userId()!, game)" alt="Character" class="w-12 h-12 rounded-full">
-                                                </div>
-                                                <div class="font-bold">REQUEST CHANGES</div>
+                                                    class="disabled:opacity-50 disabled:cursor-not-allowed">
+                                                <img src="assets/review-requestchanges.png" alt="Request Changes" class="w-24 h-32">
                                                 @if (game.roles && (game.roles[authService.userId()!] === 'LoyalDexter' || game.roles[authService.userId()!] === 'Duke' || game.roles[authService.userId()!] === 'SupportManager')) {
                                                     <div class="text-xs text-red-300 mt-1">Not allowed for Dexter players</div>
                                                 }

@@ -655,14 +655,41 @@ export class GameService {
 
                 // Set the mission team to the proposed team that was just approved
                 const missionTeam = game.teamVote?.proposedTeam || [];
-                await this.firestoreService.updateDocument('games', gameId, {
-                    mission: { team: missionTeam, cardsPlayed: {} },
-                    status: nextStatus,
-                    currentTO_id: nextTOId,
-                    voteFailsThisRound: nextVoteFails,
-                    gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: additionalLogMessage }],
-                    teamVote: null, // Clear the team vote data for the next round
-                }, true);
+
+                // Check if there's a designated player for management card and if we're in stories 1-4
+                const currentStory = game.currentStoryNum || 1;
+                const hasDesignatedPlayer = !!game.managementDesignatedPlayer && currentStory <= 4;
+
+                // If there's a designated player, set the managementPhase flag
+                if (hasDesignatedPlayer) {
+                    await this.firestoreService.updateDocument('games', gameId, {
+                        mission: { team: missionTeam, cardsPlayed: {} },
+                        status: nextStatus,
+                        currentTO_id: nextTOId,
+                        voteFailsThisRound: nextVoteFails,
+                        managementPhase: true, // Set the management phase flag
+                        gameLog: [
+                            ...(game.gameLog || []),
+                            { timestamp: new Date(), message: additionalLogMessage },
+                            { timestamp: new Date(), message: `${game.players[game.managementDesignatedPlayer!]?.name || 'Designated player'} can now draw a management card.` }
+                        ],
+                        teamVote: null, // Clear the team vote data for the next round
+                    }, true);
+
+                    // Check if the designated player is an AI and trigger them to draw a card
+                    setTimeout(async () => {
+                        await this.aiDrawManagementCard();
+                    }, 500);
+                } else {
+                    await this.firestoreService.updateDocument('games', gameId, {
+                        mission: { team: missionTeam, cardsPlayed: {} },
+                        status: nextStatus,
+                        currentTO_id: nextTOId,
+                        voteFailsThisRound: nextVoteFails,
+                        gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: additionalLogMessage }],
+                        teamVote: null, // Clear the team vote data for the next round
+                    }, true);
+                }
 
                 // Check if there are any AI players on the mission team and trigger them to submit their cards
                 const aiPlayersOnMission = missionTeam.filter(playerId =>

@@ -21,6 +21,9 @@ export interface Game {
             includeSniper: boolean;
         };
     };
+    managementDeck?: string[]; // Array of management card types
+    managementDesignatedPlayer?: string; // Player ID designated to receive a management card
+    managementPhase?: boolean; // Whether we're in the management phase (between Grooming and Review)
     createdAt: Timestamp;
     updatedAt: Timestamp;
     currentTO_id?: string; // Technical Owner ID

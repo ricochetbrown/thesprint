@@ -262,6 +262,9 @@ export class GameService {
         // Assign roles based on game settings and player count
         const roles = this.assignRoles(game.playerOrder, game);
 
+        // Initialize the management deck
+        const managementDeck = this.initializeManagementDeck();
+
         // Randomly select a player to be the first TO
         const randomIndex = Math.floor(Math.random() * game.playerOrder.length);
         const firstTO = game.playerOrder[randomIndex];
@@ -271,8 +274,34 @@ export class GameService {
             currentTO_id: firstTO,
             currentStoryNum: 1,
             roles: roles, // Store assigned roles
+            managementDeck: managementDeck, // Store the management deck
             gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: "Game started by host." }]
         }, true);
+    }
+
+    private initializeManagementDeck(): string[] {
+        // Create the management deck with 16 cards
+        // 13 unique cards + 1 extra hr + 1 extra mat + 1 extra po
+        const managementDeck = [
+            'ceo', 'cmo', 'coo', 'cso', 'cto',
+            'hr', 'hr', // 2 hr cards
+            'janitor', 'joe',
+            'mat', 'mat', // 2 mat cards
+            'po', 'po', // 2 po cards
+            'salesrep', 'sme', 'vpsales'
+        ];
+
+        // Shuffle the deck
+        return this.shuffleArray(managementDeck);
+    }
+
+    private shuffleArray<T>(array: T[]): T[] {
+        const shuffled = [...array];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
     }
 
     async addAIPlayers(gameId: string, numAI: number): Promise<void> {
@@ -413,12 +442,12 @@ export class GameService {
         return assignedRoles;
     }
 
-    async proposeTeam(team: Player[], overrideUserId?: string): Promise<void> {
+    async proposeTeam(team: Player[], overrideUserId?: string, managementDesignatedPlayerId?: string): Promise<void> {
         const gameId = this.activeGameId();
         const game = this.currentGame();
         const currentUserId = overrideUserId || this.authService.userId();
 
-        console.log("proposeTeam called with", { team, overrideUserId, currentUserId });
+        console.log("proposeTeam called with", { team, overrideUserId, currentUserId, managementDesignatedPlayerId });
 
         if (!gameId || !game || !currentUserId) {
             throw new Error("Game or user not available.");
@@ -436,18 +465,55 @@ export class GameService {
             throw new Error(`Incorrect team size. Story ${game.currentStoryNum} requires a team of ${requiredTeamSize} players.`);
         }
 
-        // 3. Update the game document in Firestore with the proposed team.
+        // 3. Check if the designated management player is valid (not on the team and exists)
         const teamPlayerIds = team.map(p => p.id);
-        const gameLogEntry = {
-            timestamp: new Date(),
-            message: `${game.players[currentUserId]?.name || 'Team Leader'} proposed a team of ${team.length} for story ${game.currentStoryNum}.`
-        };
+        let designatedPlayerId = managementDesignatedPlayerId;
 
-        await this.firestoreService.updateDocument('games', gameId, {
-            teamVote: { proposedTeam: teamPlayerIds, votes: {} },
-            status: 'teamVoting',
-            gameLog: [...(game.gameLog || []), gameLogEntry]
-        }, true);
+        if (designatedPlayerId) {
+            // Ensure the designated player exists and is not on the team
+            if (!game.players[designatedPlayerId]) {
+                throw new Error("Designated management player does not exist.");
+            }
+            if (teamPlayerIds.includes(designatedPlayerId)) {
+                throw new Error("Designated management player cannot be on the team.");
+            }
+        }
+
+        // Only allow management designation for stories 1-4
+        const currentStory = game.currentStoryNum || 1;
+        if (currentStory <= 4) {
+            // If no player was designated, we'll set managementDesignatedPlayer to null
+            // This allows the UI to know that the TO didn't select anyone
+            const updateData: any = {
+                teamVote: { proposedTeam: teamPlayerIds, votes: {} },
+                status: 'teamVoting',
+                managementDesignatedPlayer: designatedPlayerId || null,
+                gameLog: [...(game.gameLog || []), {
+                    timestamp: new Date(),
+                    message: `${game.players[currentUserId]?.name || 'Team Leader'} proposed a team of ${team.length} for story ${game.currentStoryNum}.`
+                }]
+            };
+
+            // If a player was designated, add a log entry
+            if (designatedPlayerId) {
+                updateData.gameLog.push({
+                    timestamp: new Date(),
+                    message: `${game.players[currentUserId]?.name || 'Team Leader'} designated ${game.players[designatedPlayerId]?.name || 'Unknown'} to receive a management card.`
+                });
+            }
+
+            await this.firestoreService.updateDocument('games', gameId, updateData, true);
+        } else {
+            // For story 5 and beyond, don't allow management designation
+            await this.firestoreService.updateDocument('games', gameId, {
+                teamVote: { proposedTeam: teamPlayerIds, votes: {} },
+                status: 'teamVoting',
+                gameLog: [...(game.gameLog || []), {
+                    timestamp: new Date(),
+                    message: `${game.players[currentUserId]?.name || 'Team Leader'} proposed a team of ${team.length} for story ${game.currentStoryNum}.`
+                }]
+            }, true);
+        }
     }
 
     // Helper method to determine required team size based on player count and story number
@@ -784,14 +850,36 @@ export class GameService {
 
                 // Set the mission team to the proposed team that was just approved
                 const missionTeam = game.teamVote?.proposedTeam || [];
-                await this.firestoreService.updateDocument('games', gameId, {
-                    mission: { team: missionTeam, cardsPlayed: {} },
-                    status: nextStatus,
-                    currentTO_id: nextTOId,
-                    voteFailsThisRound: nextVoteFails,
-                    gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: additionalLogMessage }],
-                    teamVote: null, // Clear the team vote data for the next round
-                }, true);
+
+                // Check if there's a designated player for management card and if we're in stories 1-4
+                const currentStory = game.currentStoryNum || 1;
+                const hasDesignatedPlayer = !!game.managementDesignatedPlayer && currentStory <= 4;
+
+                // If there's a designated player, set the managementPhase flag
+                if (hasDesignatedPlayer) {
+                    await this.firestoreService.updateDocument('games', gameId, {
+                        mission: { team: missionTeam, cardsPlayed: {} },
+                        status: nextStatus,
+                        currentTO_id: nextTOId,
+                        voteFailsThisRound: nextVoteFails,
+                        managementPhase: true, // Set the management phase flag
+                        gameLog: [
+                            ...(game.gameLog || []),
+                            { timestamp: new Date(), message: additionalLogMessage },
+                            { timestamp: new Date(), message: `${game.players[game.managementDesignatedPlayer!]?.name || 'Designated player'} can now draw a management card.` }
+                        ],
+                        teamVote: null, // Clear the team vote data for the next round
+                    }, true);
+                } else {
+                    await this.firestoreService.updateDocument('games', gameId, {
+                        mission: { team: missionTeam, cardsPlayed: {} },
+                        status: nextStatus,
+                        currentTO_id: nextTOId,
+                        voteFailsThisRound: nextVoteFails,
+                        gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: additionalLogMessage }],
+                        teamVote: null, // Clear the team vote data for the next round
+                    }, true);
+                }
 
                 // Return early since we've already updated the game
                 return;
@@ -835,6 +923,144 @@ export class GameService {
         if (currentUserId.startsWith(gameId + '-AI-') && game.status === 'teamVoting' && !game.teamVote?.votes?.[currentUserId]) {
             await this.aiSubmitVoteForPlayer(currentUserId);
         }
+    }
+
+    // Function to draw a management card
+    async drawManagementCard(): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = this.authService.userId();
+
+        if (!gameId || !game || !currentUserId) {
+            throw new Error("Game or user not available.");
+        }
+
+        // Check if we're in the management phase and the current user is the designated player
+        if (!game.managementPhase || game.managementDesignatedPlayer !== currentUserId) {
+            throw new Error("You are not allowed to draw a management card at this time.");
+        }
+
+        // Check if there are cards left in the deck
+        if (!game.managementDeck || game.managementDeck.length === 0) {
+            throw new Error("No management cards left in the deck.");
+        }
+
+        // Get the current player
+        const player = game.players[currentUserId];
+        if (!player) {
+            throw new Error("Player not found.");
+        }
+
+        // If the player already has a management card, discard it first
+        let gameLogEntries = [];
+        if (player.managementCard) {
+            gameLogEntries.push({
+                timestamp: new Date(),
+                message: `${player.name} discarded their ${player.managementCard} management card.`
+            });
+        }
+
+        // Draw a card from the top of the deck
+        const drawnCard = game.managementDeck[0];
+        const updatedDeck = game.managementDeck.slice(1); // Remove the top card
+
+        // Update the player's management card
+        const updatedPlayers = { ...game.players };
+        updatedPlayers[currentUserId] = {
+            ...player,
+            managementCard: drawnCard
+        };
+
+        // Add a log entry
+        gameLogEntries.push({
+            timestamp: new Date(),
+            message: `${player.name} drew a management card.`
+        });
+
+        // Update the game
+        await this.firestoreService.updateDocument('games', gameId, {
+            players: updatedPlayers,
+            managementDeck: updatedDeck,
+            managementPhase: false, // End the management phase
+            managementDesignatedPlayer: null, // Clear the designated player
+            gameLog: [...(game.gameLog || []), ...gameLogEntries]
+        }, true);
+    }
+
+    // Function to skip drawing a management card
+    async skipManagementCard(): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = this.authService.userId();
+
+        if (!gameId || !game || !currentUserId) {
+            throw new Error("Game or user not available.");
+        }
+
+        // Check if we're in the management phase and the current user is the designated player
+        if (!game.managementPhase || game.managementDesignatedPlayer !== currentUserId) {
+            throw new Error("You are not allowed to skip drawing a management card at this time.");
+        }
+
+        // Add a log entry
+        const gameLogEntry = {
+            timestamp: new Date(),
+            message: `${game.players[currentUserId]?.name || 'Player'} declined to draw a management card.`
+        };
+
+        // Update the game
+        await this.firestoreService.updateDocument('games', gameId, {
+            managementPhase: false, // End the management phase
+            managementDesignatedPlayer: null, // Clear the designated player
+            gameLog: [...(game.gameLog || []), gameLogEntry]
+        }, true);
+    }
+
+    // Function to play a management card
+    async playManagementCard(): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = this.authService.userId();
+
+        if (!gameId || !game || !currentUserId) {
+            throw new Error("Game or user not available.");
+        }
+
+        // Get the current player
+        const player = game.players[currentUserId];
+        if (!player) {
+            throw new Error("Player not found.");
+        }
+
+        // Check if the player has a management card
+        if (!player.managementCard) {
+            throw new Error("You don't have a management card to play.");
+        }
+
+        // Check if we're in the right phase to play management cards
+        // Management cards can only be played between the end of the Grooming Phase and the start of the Review Phase
+        if (game.status !== 'mission') {
+            throw new Error("Management cards can only be played between the Grooming Phase and the Review Phase.");
+        }
+
+        // Add a log entry
+        const gameLogEntry = {
+            timestamp: new Date(),
+            message: `${player.name} played their ${player.managementCard} management card.`
+        };
+
+        // Update the player's management card (remove it)
+        const updatedPlayers = { ...game.players };
+        updatedPlayers[currentUserId] = {
+            ...player,
+            managementCard: undefined
+        };
+
+        // Update the game
+        await this.firestoreService.updateDocument('games', gameId, {
+            players: updatedPlayers,
+            gameLog: [...(game.gameLog || []), gameLogEntry]
+        }, true);
     }
 
 

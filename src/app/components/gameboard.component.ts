@@ -40,6 +40,10 @@ import { FormsModule } from "@angular/forms";
                                     @if (game.mission?.team?.includes(playerId) || game.teamVote?.proposedTeam?.includes(playerId)) {
                                         <img src="assets/supercoder.png" alt="Team" class="absolute top-0 left-0 w-8 h-8 md:w-10 md:h-10">
                                     }
+                                    <!-- Management designated player overlay -->
+                                    @if (playerId === game.managementDesignatedPlayer) {
+                                        <img src="assets/guido.png" alt="Management" class="absolute top-0 left-0 w-8 h-8 md:w-10 md:h-10">
+                                    }
                                 </div>
                                 <div class="text-center">
                                     <span class="text-xs md:text-sm truncate w-full block">{{ game.players[playerId].name }}</span>
@@ -98,6 +102,25 @@ import { FormsModule } from "@angular/forms";
                                                 </button>
                                             }
                                         </div>
+
+                                        <!-- Management card designation (only for stories 1-4) -->
+                                        @if ((game.currentStoryNum || 1) <= 4) {
+                                            <div class="mt-4 mb-4">
+                                                <p class="mb-2">Select a player not on the team to receive a management card:</p>
+                                                <div class="flex flex-wrap gap-2">
+                                                    @for (playerId of game.playerOrder; track playerId) {
+                                                        @if (!selectedPlayers.includes(playerId)) {
+                                                            <button class="px-3 py-1 rounded"
+                                                                    [ngClass]="{'bg-purple-500 text-white': managementDesignatedPlayer === playerId, 'bg-gray-300 text-black': managementDesignatedPlayer !== playerId}"
+                                                                    (click)="toggleManagementDesignation(playerId)">
+                                                                    {{ game.players[playerId]?.name }}
+                                                            </button>
+                                                        }
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+
                                         <button (click)="proposeTeam(game)"
                                                 [disabled]="selectedPlayers.length !== getNumToSelect(game)"
                                                 class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded disabled:opacity-50 disabled:cursor-not-allowed">
@@ -138,7 +161,52 @@ import { FormsModule } from "@angular/forms";
                             }
                             @case ('mission') {
                                 <div>
+                                    <!-- Management Phase UI -->
+                                    @if (game.managementPhase && authService.userId() === game.managementDesignatedPlayer) {
+                                        <div class="bg-purple-800 bg-opacity-80 p-4 rounded-lg mb-4">
+                                            <h3 class="text-xl font-bold mb-2">Management Card</h3>
+                                            <p class="mb-4">You have been designated to receive a management card. Would you like to draw one?</p>
+
+                                            @if (getPlayerManagementCard(authService.userId()!, game)) {
+                                                <p class="mb-2 text-yellow-300">
+                                                    Note: You already have a {{ getPlayerManagementCard(authService.userId()!, game) }} card.
+                                                    Drawing a new card will discard your current one.
+                                                </p>
+                                            }
+
+                                            <div class="flex gap-4">
+                                                <button (click)="gameService.drawManagementCard()"
+                                                        class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded">
+                                                    Draw Card
+                                                </button>
+                                                <button (click)="gameService.skipManagementCard()"
+                                                        class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded">
+                                                    Skip
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+
                                     <p class="mb-2">Team on User Story: <span class="font-bold">{{ getUserStoryTeamNames(game) }}</span></p>
+
+                                    <!-- Management Card Play UI -->
+                                    @if (getPlayerManagementCard(authService.userId()!, game)) {
+                                        <div class="bg-purple-800 bg-opacity-80 p-4 rounded-lg mb-4">
+                                            <h3 class="text-xl font-bold mb-2">Your Management Card</h3>
+                                            <div class="flex items-center gap-4">
+                                                <img [src]="'assets/management/' + getPlayerManagementCard(authService.userId()!, game) + '.png'"
+                                                     alt="Management Card" class="w-16 h-24">
+                                                <div>
+                                                    <p class="mb-2">You have a {{ getPlayerManagementCard(authService.userId()!, game) }} management card.</p>
+                                                    <button (click)="gameService.playManagementCard()"
+                                                            class="bg-purple-500 hover:bg-purple-600 px-4 py-2 rounded">
+                                                        Play Card
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+
                                     @if (isPlayerOnUserStory(game)) {
                                         <p class="mb-4">Play your card (Approve/Request Changes).</p>
                                         <div class="flex gap-4">
@@ -213,7 +281,8 @@ export class GameBoardComponent {
     authService = inject(AuthService);
     gameService = inject(GameService);
 
- selectedPlayers: string[] = []; // Array to hold selected player IDs for team proposal
+    selectedPlayers: string[] = []; // Array to hold selected player IDs for team proposal
+    managementDesignatedPlayer: string | null = null; // Player ID designated to receive a management card
 
     myRole = computed(() => {
         const game = this.gameService.currentGame();
@@ -374,7 +443,17 @@ export class GameBoardComponent {
         console.log("Propose Team clicked");
         // Convert selectedPlayers IDs to Player objects
         const selectedTeam = this.selectedPlayers.map(playerId => game.players[playerId]);
-        this.gameService.proposeTeam(selectedTeam);
+        this.gameService.proposeTeam(selectedTeam, undefined, this.managementDesignatedPlayer || undefined);
+    }
+
+    toggleManagementDesignation(playerId: string): void {
+        // If the player is already designated, undesignate them
+        if (this.managementDesignatedPlayer === playerId) {
+            this.managementDesignatedPlayer = null;
+        } else {
+            // Otherwise, designate them
+            this.managementDesignatedPlayer = playerId;
+        }
     }
 
     togglePlayerSelection(playerId: string, game: Game): void {
@@ -480,5 +559,14 @@ export class GameBoardComponent {
 
         // For all other players, show dexter.png
         return "assets/dexter.png";
+    }
+
+    // Get the management card for a player
+    getPlayerManagementCard(playerId: string, game: Game): string | null {
+        if (!game.players[playerId]) {
+            return null;
+        }
+
+        return game.players[playerId].managementCard || null;
     }
 }

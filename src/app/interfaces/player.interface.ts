@@ -5,6 +5,6 @@ export interface Player {
     color?: string; // Hex color for UI
     isHost?: boolean;
     role?: string; // 'Duke', 'Sniper', 'LoyalDexter', 'SinisterSpy', etc.
-    managementCard?: string; // 'ceo', 'cmo', 'coo', etc.
+    managementCard: string | null; // 'ceo', 'cmo', 'coo', etc.
     // Add other player-specific game state if needed
 }

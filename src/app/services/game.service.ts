@@ -125,9 +125,10 @@ export class GameService {
         if (!currentUser || !currentUserId) throw new Error("User not authenticated to create game.");
 
         const hostPlayer: Player = {
-            id: currentUserId,
-            name: currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : 'Host Player'),
-            isHost: true
+          id: currentUserId,
+          name: currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : 'Host Player'),
+          isHost: true,
+          managementCard: null
         };
 
         // Default optional roles if not provided
@@ -179,8 +180,9 @@ export class GameService {
         }
 
         const newPlayer: Player = {
-            id: currentUserId,
-            name: currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : `Player ${Object.keys(game.players).length + 1}`)
+          id: currentUserId,
+          name: currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : `Player ${Object.keys(game.players).length + 1}`),
+          managementCard: null
         };
 
         const updatedPlayers = { ...game.players, [currentUserId]: newPlayer };
@@ -323,7 +325,9 @@ export class GameService {
 
         for (let i = 1; i <= numAI; i++) {
             const aiPlayerId = `${gameId}-AI-${Date.now()}-${i}`; // Simple unique ID
-            updatedPlayers[aiPlayerId] = { id: aiPlayerId, name: `AI Player ${currentPlayers + i}`, isHost: false };
+            updatedPlayers[aiPlayerId] = {
+              managementCard: null,
+              id: aiPlayerId, name: `AI Player ${currentPlayers + i}`, isHost: false };
             updatedPlayerOrder.push(aiPlayerId);
         }
         await this.firestoreService.updateDocument('games', gameId, { players: updatedPlayers, playerOrder: updatedPlayerOrder }, true);
@@ -1186,7 +1190,7 @@ export class GameService {
         const updatedPlayers = { ...game.players };
         updatedPlayers[currentUserId] = {
             ...player,
-            managementCard: undefined
+            managementCard: null
         };
 
         // Record the played card

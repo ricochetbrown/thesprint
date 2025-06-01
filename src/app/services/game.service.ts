@@ -1262,6 +1262,12 @@ export class GameService {
             return; // No active game or no mission
         }
 
+        // Check if we're in the management phase - if so, don't submit any cards yet
+        if (game.managementPhase) {
+            console.log("submitAllAIMissionCards: In management phase, waiting for management card to be drawn");
+            return; // Wait for management card to be drawn
+        }
+
         console.log("submitAllAIMissionCards: Game status", game.status);
         console.log("submitAllAIMissionCards: Mission team", game.mission.team);
 
@@ -1377,6 +1383,12 @@ export class GameService {
         console.log("submitMissionCard: Game status", game.status);
         console.log("submitMissionCard: Mission team", game.mission?.team);
         console.log("submitMissionCard: Current user", currentUserId);
+
+        // Check if we're in the management phase - if so, don't submit any cards yet
+        if (game.managementPhase) {
+            console.error("submitMissionCard: In management phase, waiting for management card to be drawn");
+            throw new Error("Cannot play mission cards until the management card is drawn.");
+        }
 
         // 1. Check if the current game status is 'mission' and if the current user is on the mission team.\n
         if (game.status !== 'mission' || !game.mission?.team.includes(currentUserId)) {

@@ -1035,9 +1035,29 @@ export class GameService {
             players: updatedPlayers,
             managementDeck: updatedDeck,
             managementPhase: false, // End the management phase
+            managementCardPlayPhase: true, // Set the management card play phase
             managementDesignatedPlayer: null, // Clear the designated player
             gameLog: [...(game.gameLog || []), ...gameLogEntries]
         }, true);
+
+        // Give AI players a chance to play their management cards
+        setTimeout(async () => {
+            await this.aiPlayManagementCard();
+
+            // After AI players have had a chance to play their management cards,
+            // allow AI players on the mission team to submit their mission cards
+            const currentGame = this.currentGame();
+            if (currentGame && currentGame.status === 'mission' && currentGame.mission?.team) {
+                const aiPlayersOnMission = currentGame.mission.team.filter(playerId =>
+                    playerId.startsWith(gameId + '-AI-')
+                );
+
+                if (aiPlayersOnMission.length > 0) {
+                    console.log(`drawManagementCard: Triggering ${aiPlayersOnMission.length} AI players to submit mission cards`);
+                    await this.submitAllAIMissionCards(aiPlayersOnMission);
+                }
+            }
+        }, 500);
     }
 
     // Function for AI to draw a management card
@@ -1092,9 +1112,29 @@ export class GameService {
         // Update the game
         await this.firestoreService.updateDocument('games', gameId, {
             managementPhase: false, // End the management phase
+            managementCardPlayPhase: false, // Ensure management card play phase is also false
             managementDesignatedPlayer: null, // Clear the designated player
             gameLog: [...(game.gameLog || []), gameLogEntry]
         }, true);
+
+        // Give AI players a chance to play their management cards
+        setTimeout(async () => {
+            await this.aiPlayManagementCard();
+
+            // After AI players have had a chance to play their management cards,
+            // allow AI players on the mission team to submit their mission cards
+            const currentGame = this.currentGame();
+            if (currentGame && currentGame.status === 'mission' && currentGame.mission?.team) {
+                const aiPlayersOnMission = currentGame.mission.team.filter(playerId =>
+                    playerId.startsWith(gameId + '-AI-')
+                );
+
+                if (aiPlayersOnMission.length > 0) {
+                    console.log(`skipManagementCard: Triggering ${aiPlayersOnMission.length} AI players to submit mission cards`);
+                    await this.submitAllAIMissionCards(aiPlayersOnMission);
+                }
+            }
+        }, 500);
     }
 
     // Function to play a management card
@@ -1183,9 +1223,29 @@ export class GameService {
         await this.firestoreService.updateDocument('games', gameId, {
             players: updatedPlayers,
             playedManagementCard: playedCard,
+            managementCardPlayPhase: false, // End the management card play phase
             gameLog: [...(game.gameLog || []), gameLogEntry],
             ...additionalUpdates
         }, true);
+
+        // Give other AI players a chance to play their management cards
+        setTimeout(async () => {
+            await this.aiPlayManagementCard();
+
+            // After AI players have had a chance to play their management cards,
+            // allow AI players on the mission team to submit their mission cards
+            const currentGame = this.currentGame();
+            if (currentGame && currentGame.status === 'mission' && currentGame.mission?.team) {
+                const aiPlayersOnMission = currentGame.mission.team.filter(playerId =>
+                    playerId.startsWith(gameId + '-AI-')
+                );
+
+                if (aiPlayersOnMission.length > 0) {
+                    console.log(`playManagementCard: Triggering ${aiPlayersOnMission.length} AI players to submit mission cards`);
+                    await this.submitAllAIMissionCards(aiPlayersOnMission);
+                }
+            }
+        }, 500);
     }
 
     // Function for AI to play a management card
@@ -1199,12 +1259,17 @@ export class GameService {
             return; // No active game
         }
 
-        // Check if the player is an AI, has a management card, and we're in the right phase
+        // Check if the player is an AI and has a management card
         if (!aiPlayerId.startsWith(gameId + '-AI-') ||
-            !game.players[aiPlayerId]?.managementCard ||
-            game.status !== 'mission') {
+            !game.players[aiPlayerId]?.managementCard) {
             console.log(`aiPlayManagementCardForPlayer: Skipping AI player ${aiPlayerId}`);
-            return; // Not an AI or no management card or wrong phase
+            return; // Not an AI or no management card
+        }
+
+        // Check if we're in the right phase (mission phase or management card play phase)
+        if (game.status !== 'mission' && !game.managementCardPlayPhase) {
+            console.log(`aiPlayManagementCardForPlayer: Skipping AI player ${aiPlayerId} - not in mission phase or management card play phase`);
+            return; // Wrong phase
         }
 
         const cardId = game.players[aiPlayerId].managementCard;
@@ -1262,10 +1327,10 @@ export class GameService {
             return; // No active game or no mission
         }
 
-        // Check if we're in the management phase - if so, don't submit any cards yet
-        if (game.managementPhase) {
-            console.log("submitAllAIMissionCards: In management phase, waiting for management card to be drawn");
-            return; // Wait for management card to be drawn
+        // Check if we're in the management phase or management card play phase - if so, don't submit any cards yet
+        if (game.managementPhase || game.managementCardPlayPhase) {
+            console.log("submitAllAIMissionCards: In management phase or management card play phase, waiting for management card to be drawn or played");
+            return; // Wait for management card to be drawn and played or skipped
         }
 
         console.log("submitAllAIMissionCards: Game status", game.status);
@@ -1384,10 +1449,10 @@ export class GameService {
         console.log("submitMissionCard: Mission team", game.mission?.team);
         console.log("submitMissionCard: Current user", currentUserId);
 
-        // Check if we're in the management phase - if so, don't submit any cards yet
-        if (game.managementPhase) {
-            console.error("submitMissionCard: In management phase, waiting for management card to be drawn");
-            throw new Error("Cannot play mission cards until the management card is drawn.");
+        // Check if we're in the management phase or management card play phase - if so, don't submit any cards yet
+        if (game.managementPhase || game.managementCardPlayPhase) {
+            console.error("submitMissionCard: In management phase or management card play phase, waiting for management card to be drawn or played");
+            throw new Error("Cannot play mission cards until the management card is drawn and played or skipped.");
         }
 
         // 1. Check if the current game status is 'mission' and if the current user is on the mission team.\n

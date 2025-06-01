@@ -62,7 +62,7 @@ import { FormsModule } from "@angular/forms";
                                             'bg-red-500 border-red-400': result === 'sinister',
                                             'bg-gray-600 border-gray-500': result === null
                                           }"
-                                          [title]="result !== null ? 'Team: ' + getCompletedMissionTeamNames(game, $index) : 'Not completed yet'">
+                                          [title]="getMissionHistoryInfo(game, $index)">
                                         OD-{{ $index + 1 }}
                                     </span>
                                 }
@@ -347,6 +347,27 @@ export class GameBoardComponent {
     getCompletedMissionTeamNames(game: Game, storyIndex: number): string {
         if (!game.completedMissionTeams || !game.completedMissionTeams[storyIndex]) return 'No data available';
         return game.completedMissionTeams[storyIndex].map(id => game.players[id]?.name || 'Unknown').join(', ');
+    }
+
+    getMissionHistoryInfo(game: Game, storyIndex: number): string {
+        if (!game.storyResults || game.storyResults[storyIndex] === null) return 'Not completed yet';
+
+        let info = 'Team: ' + this.getCompletedMissionTeamNames(game, storyIndex);
+
+        // Add TO who proposed the team
+        if (game.missionHistory && game.missionHistory[storyIndex] && game.missionHistory[storyIndex].acceptedTeamProposedBy) {
+            const toId = game.missionHistory[storyIndex].acceptedTeamProposedBy;
+            const toName = game.players[toId]?.name || 'Unknown TO';
+            info += '\nProposed by: ' + toName;
+        }
+
+        // Add request changes count if the mission failed
+        if (game.storyResults[storyIndex] === 'sinister' && game.missionHistory && game.missionHistory[storyIndex]) {
+            const requestCount = game.missionHistory[storyIndex].requestChangesCount;
+            info += '\nRequest Changes: ' + requestCount;
+        }
+
+        return info;
     }
 
     isPlayerOnUserStory(game: Game): boolean {

@@ -1103,6 +1103,15 @@ export class GameService {
                 completedMissionTeams[currentStoryIndex] = missionTeam;
                 updateData.completedMissionTeams = completedMissionTeams;
 
+                // Store mission history with additional information
+                const missionHistory = { ...(latestGame.missionHistory || {}) };
+                missionHistory[currentStoryIndex] = {
+                    team: missionTeam,
+                    acceptedTeamProposedBy: latestGame.currentTO_id || '',
+                    requestChangesCount: requestCount
+                };
+                updateData.missionHistory = missionHistory;
+
                 // Only add winner field if it's defined
                 if (winner !== undefined) {
                     updateData.winner = winner;

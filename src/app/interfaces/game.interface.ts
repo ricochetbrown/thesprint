@@ -28,6 +28,13 @@ export interface Game {
     storiesTotal?: number;
     storyResults?: ('dexter' | 'sinister' | null)[]; // For each story
     completedMissionTeams?: { [storyIndex: number]: string[] }; // Teams for completed missions
+    missionHistory?: {
+        [storyIndex: number]: {
+            team: string[];
+            acceptedTeamProposedBy: string; // TO ID who proposed the accepted team
+            requestChangesCount: number; // Number of "request changes" cards
+        }
+    };
     voteFailsThisRound?: number; // Rethrows for current story
     gameLog?: { timestamp: Timestamp, message: string }[];
     // Specific game phase data

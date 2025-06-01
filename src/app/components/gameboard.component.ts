@@ -28,17 +28,16 @@ import { FormsModule } from "@angular/forms";
                             <div class="flex flex-col items-center">
                                 <div class="rounded-full text-center w-20 h-20 md:w-24 md:h-24 flex justify-center items-center border-2 mb-1 relative"
                                      [ngClass]="{
-                                        'border-yellow-400 shadow-yellow-400/50 shadow-lg': playerId === game.currentTO_id,
                                         'border-gray-600': playerId !== game.currentTO_id,
                                         'border-indigo-600 shadow-indigo-400/50 shadow-lg': isPlayerDukeForSupportManager(playerId, game)
                                      }">
                                     <img [src]="getPlayerAvatarUrl(playerId, game)" alt="P" class="w-16 h-16 md:w-20 md:h-20 rounded-full">
                                     <!-- Technical Owner overlay -->
                                     @if (playerId === game.currentTO_id) {
-                                        <img src="assets/technicalowner.png" alt="TO" class="absolute top-0 right-0 w-8 h-8 md:w-10 md:h-10">
+                                        <img src="assets/technicalowner.png" alt="TO" class="absolute top-0 right-0 w-12 h-12 md:w-14 md:h-14">
                                     }
-                                    <!-- Approved team member overlay -->
-                                    @if (game.mission?.team?.includes(playerId)) {
+                                    <!-- Team member overlay (for both proposed and approved teams) -->
+                                    @if (game.mission?.team?.includes(playerId) || game.teamVote?.proposedTeam?.includes(playerId)) {
                                         <img src="assets/thesprint_logo.png" alt="Team" class="absolute top-0 left-0 w-8 h-8 md:w-10 md:h-10">
                                     }
                                 </div>

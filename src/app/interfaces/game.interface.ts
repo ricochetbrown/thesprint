@@ -27,6 +27,7 @@ export interface Game {
     currentStoryNum?: number; // 1-based index
     storiesTotal?: number;
     storyResults?: ('dexter' | 'sinister' | null)[]; // For each story
+    completedMissionTeams?: { [storyIndex: number]: string[] }; // Teams for completed missions
     voteFailsThisRound?: number; // Rethrows for current story
     gameLog?: { timestamp: Timestamp, message: string }[];
     // Specific game phase data

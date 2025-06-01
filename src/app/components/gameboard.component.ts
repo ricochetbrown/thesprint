@@ -56,12 +56,13 @@ import { FormsModule } from "@angular/forms";
                             User Stories:
                             <span class="flex">
                                 @for (result of game.storyResults; track $index) {
-                                    <span class="w-10 h-6 md:w-12 md:h-8 border mx-0.5 flex items-center justify-center text-xs rounded"
+                                    <span class="w-10 h-6 md:w-12 md:h-8 border mx-0.5 flex items-center justify-center text-xs rounded cursor-help"
                                           [ngClass]="{
                                             'bg-blue-500 border-blue-400': result === 'dexter',
                                             'bg-red-500 border-red-400': result === 'sinister',
                                             'bg-gray-600 border-gray-500': result === null
-                                          }">
+                                          }"
+                                          [title]="result !== null ? 'Team: ' + getCompletedMissionTeamNames(game, $index) : 'Not completed yet'">
                                         OD-{{ $index + 1 }}
                                     </span>
                                 }
@@ -303,7 +304,7 @@ export class GameBoardComponent {
         switch(status) {
             case 'teamProposal': return 'Team Proposal';
             case 'teamVoting': return 'Team Vote';
-            case 'mission': return 'User Story Review';
+            case 'mission': return 'Review';
             case 'results': return 'Results';
             case 'gameOver': return 'Game Over';
             default: return status.charAt(0).toUpperCase() + status.slice(1);
@@ -341,6 +342,11 @@ export class GameBoardComponent {
     getUserStoryTeamNames(game: Game): string {
         if (!game.mission?.team) return 'N/A';
         return game.mission.team.map(id => game.players[id]?.name || 'Unknown').join(', ');
+    }
+
+    getCompletedMissionTeamNames(game: Game, storyIndex: number): string {
+        if (!game.completedMissionTeams || !game.completedMissionTeams[storyIndex]) return 'No data available';
+        return game.completedMissionTeams[storyIndex].map(id => game.players[id]?.name || 'Unknown').join(', ');
     }
 
     isPlayerOnUserStory(game: Game): boolean {

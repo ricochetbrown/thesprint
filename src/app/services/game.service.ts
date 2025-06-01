@@ -1098,6 +1098,11 @@ export class GameService {
                     gameLog: [...(latestGame.gameLog || []), { timestamp: new Date(), message: additionalLogMessage }],
                 };
 
+                // Store the mission team for this completed story
+                const completedMissionTeams = { ...(latestGame.completedMissionTeams || {}) };
+                completedMissionTeams[currentStoryIndex] = missionTeam;
+                updateData.completedMissionTeams = completedMissionTeams;
+
                 // Only add winner field if it's defined
                 if (winner !== undefined) {
                     updateData.winner = winner;

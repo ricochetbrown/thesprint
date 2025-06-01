@@ -79,9 +79,6 @@ import { FormsModule } from "@angular/forms";
                                     <div class="flex items-center gap-3 p-2 bg-slate-800 rounded">
                                         <img src="https://via.placeholder.com/60/{{ getPlayerColor(playerId) }}/FFFFFF?Text={{game.players[playerId].name.substring(0,1).toUpperCase() || 'P'}}" alt="Avatar" class="w-12 h-12 rounded-full border-2" [style.borderColor]="'#' + getPlayerColor(playerId)">
                                         <span class="font-medium text-lg">{{ game.players[playerId].name }} {{ game.players[playerId].isHost ? '(Host)' : '' }}</span>
-                                        @if (playerId === authService.userId()) {
-                                            <span class="text-xs text-yellow-300 ml-auto">(You)</span>
-                                        }
                                     </div>
                                 }
                             </div>

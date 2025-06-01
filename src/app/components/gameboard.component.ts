@@ -11,10 +11,13 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
     selector: 'app-game-board',
     standalone: true,
     template: `
-        <div class="min-h-screen flex flex-col" style="background-image: url('https://via.placeholder.com/1920x1080/1A202C/FFFFFF?Text=Game+Board+Background'); background-size: cover;">
+        <div class="min-h-screen flex flex-col relative" style="background-image: url('https://via.placeholder.com/1920x1080/1A202C/FFFFFF?Text=Game+Board+Background'); background-size: cover;">
             <nav class="bg-black bg-opacity-60 p-3 flex justify-between items-center shadow-lg text-sm sticky top-0 z-20">
                 <div>Game: {{ gameService.currentGame()?.name }} - Round: {{ gameService.currentGame()?.currentStoryNum }} / {{ gameService.currentGame()?.storiesTotal }}</div>
                 <div>My Role: <span class="font-bold text-cyan-400">{{ myRole() }}</span></div>
+                <button (click)="toggleSidebar()" class="bg-purple-600 hover:bg-purple-700 px-2 py-1 rounded text-xs">
+                    {{ showSidebar ? 'Hide' : 'Show' }} Cards & Roles
+                </button>
                 <button (click)="gameService.leaveGame()" class="text-red-300 hover:text-red-100">Quit Game</button>
             </nav>
 
@@ -198,7 +201,8 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                                 <img [src]="'assets/management/' + getPlayerManagementCard(authService.userId()!, game) + '.png'"
                                                      alt="Management Card" class="w-16 h-24">
                                                 <div>
-                                                    <p class="mb-2">You have a {{ getPlayerManagementCard(authService.userId()!, game) }} management card.</p>
+                                                    <p class="mb-2 font-semibold">{{ MANAGEMENT_CARDS[getPlayerManagementCard(authService.userId()!, game)!]?.title }} - {{ MANAGEMENT_CARDS[getPlayerManagementCard(authService.userId()!, game)!]?.name }}</p>
+                                                    <p class="mb-2 text-sm">{{ MANAGEMENT_CARDS[getPlayerManagementCard(authService.userId()!, game)!]?.instructions }}</p>
                                                     <button (click)="gameService.playManagementCard()"
                                                             class="bg-purple-500 hover:bg-purple-600 px-4 py-2 rounded">
                                                         Play Card
@@ -278,11 +282,29 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                         </div>
                     }
 
-                    <div class="grid md:grid-cols-2 gap-4 mt-4">
+                    <div class="grid md:grid-cols-3 gap-4 mt-4">
                         <div class="bg-slate-700 bg-opacity-90 p-3 rounded">
                             <h4 class="font-semibold border-b border-slate-600 pb-1 mb-1 text-sm">Your Role: <span class="text-cyan-300">{{myRole()}}</span></h4>
                             <p class="text-xs text-gray-300">{{getRoleDescription(myRole())}}</p>
                         </div>
+
+                        <!-- User's Management Card (Always Visible) -->
+                        <div class="bg-slate-700 bg-opacity-90 p-3 rounded">
+                            <h4 class="font-semibold border-b border-slate-600 pb-1 mb-1 text-sm">Your Management Card</h4>
+                            @if (getPlayerManagementCard(authService.userId()!, game)) {
+                                <div class="flex items-center gap-2">
+                                    <img [src]="'assets/management/' + getPlayerManagementCard(authService.userId()!, game) + '.png'"
+                                         alt="Management Card" class="w-12 h-18">
+                                    <div>
+                                        <p class="text-xs font-semibold">{{ MANAGEMENT_CARDS[getPlayerManagementCard(authService.userId()!, game)!]?.title }} - {{ MANAGEMENT_CARDS[getPlayerManagementCard(authService.userId()!, game)!]?.name }}</p>
+                                        <p class="text-xs text-gray-300">{{ MANAGEMENT_CARDS[getPlayerManagementCard(authService.userId()!, game)!]?.instructions }}</p>
+                                    </div>
+                                </div>
+                            } @else {
+                                <p class="text-xs text-gray-300">You don't have a management card yet.</p>
+                            }
+                        </div>
+
                         <div class="bg-slate-700 bg-opacity-90 p-3 rounded">
                             <h4 class="font-semibold border-b border-slate-600 pb-1 mb-1 text-sm">Game Chat (Conceptual)</h4>
                             <div class="h-20 overflow-y-auto text-xs bg-slate-800 p-1 rounded"></div>
@@ -292,6 +314,59 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
             } @else {
                 <div class="text-center p-8">Loading game...</div>
             }
+
+            <!-- Sidebar for Cards & Roles -->
+            @if (gameService.currentGame(); as game) {
+                <div class="fixed top-0 right-0 h-full bg-slate-900 bg-opacity-95 shadow-lg z-30 overflow-y-auto transition-all duration-300"
+                     [ngClass]="{'w-80': showSidebar, 'w-0': !showSidebar}">
+                    <div class="p-4 mt-16">
+                        <!-- User's Management Card Section -->
+                        @if (getPlayerManagementCard(authService.userId()!, game)) {
+                            <div class="bg-purple-800 bg-opacity-80 p-4 rounded-lg mb-4">
+                                <h3 class="text-xl font-bold mb-2">Your Management Card</h3>
+                                <div class="flex items-center gap-4">
+                                    <img [src]="'assets/management/' + getPlayerManagementCard(authService.userId()!, game) + '.png'"
+                                         alt="Management Card" class="w-16 h-24">
+                                    <div>
+                                        <p class="mb-2">{{ MANAGEMENT_CARDS[getPlayerManagementCard(authService.userId()!, game)!]?.title }} - {{ MANAGEMENT_CARDS[getPlayerManagementCard(authService.userId()!, game)!]?.name }}</p>
+                                        <p class="text-xs">{{ MANAGEMENT_CARDS[getPlayerManagementCard(authService.userId()!, game)!]?.instructions }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- All Management Cards Section -->
+                        <div class="mb-4">
+                            <h3 class="text-xl font-bold mb-2 border-b border-gray-700 pb-2">Management Cards</h3>
+                            @for (cardId of getAllManagementCardIds(); track cardId) {
+                                <div class="bg-slate-800 p-3 rounded-lg mb-2">
+                                    <div class="flex items-start gap-2">
+                                        <img [src]="'assets/management/' + cardId + '.png'"
+                                             alt="Management Card" class="w-12 h-18 flex-shrink-0">
+                                        <div>
+                                            <h4 class="font-semibold">{{ MANAGEMENT_CARDS[cardId]?.title }} - {{ MANAGEMENT_CARDS[cardId]?.name }}</h4>
+                                            <p class="text-xs text-gray-300">{{ MANAGEMENT_CARDS[cardId]?.instructions }}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- All Roles Section -->
+                        <div>
+                            <h3 class="text-xl font-bold mb-2 border-b border-gray-700 pb-2">Roles in Game</h3>
+                            <div class="grid grid-cols-1 gap-2">
+                                @for (role of getActiveRoles(game); track role) {
+                                    <div class="bg-slate-800 p-3 rounded-lg">
+                                        <h4 class="font-semibold">{{ role }}</h4>
+                                        <p class="text-xs text-gray-300">{{ getRoleDescription(role) }}</p>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
         </div>
     `,
     imports: [CommonModule, FormsModule]
@@ -299,9 +374,34 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
 export class GameBoardComponent {
     authService = inject(AuthService);
     gameService = inject(GameService);
+    MANAGEMENT_CARDS = MANAGEMENT_CARDS; // Make MANAGEMENT_CARDS accessible in the template
 
     selectedPlayers: string[] = []; // Array to hold selected player IDs for team proposal
     managementDesignatedPlayer: string | null = null; // Player ID designated to receive a management card
+    showSidebar: boolean = false; // Controls visibility of the cards & roles sidebar
+
+    // Toggle sidebar visibility
+    toggleSidebar(): void {
+        this.showSidebar = !this.showSidebar;
+    }
+
+    // Get all management card IDs
+    getAllManagementCardIds(): string[] {
+        return Object.keys(MANAGEMENT_CARDS);
+    }
+
+    // Get all active roles in the game
+    getActiveRoles(game: Game): string[] {
+        if (!game.roles) return [];
+
+        // Get unique roles from the game
+        const uniqueRoles = new Set<string>();
+        Object.values(game.roles).forEach(role => {
+            if (role) uniqueRoles.add(role);
+        });
+
+        return Array.from(uniqueRoles);
+    }
 
     myRole = computed(() => {
         const game = this.gameService.currentGame();

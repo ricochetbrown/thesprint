@@ -18,6 +18,7 @@ export interface Game {
             includeSupportManager: boolean;
             includeNerlin: boolean;
             includeDevSlayer: boolean;
+            includeSniper: boolean;
         };
     };
     createdAt: Timestamp;

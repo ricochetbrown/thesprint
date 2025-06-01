@@ -311,7 +311,8 @@ export class GameService {
             includeDuke: true,
             includeSupportManager: false,
             includeNerlin: false,
-            includeDevSlayer: false
+            includeDevSlayer: false,
+            includeSniper: false
         };
 
         // Determine number of Loyal Dexters and Sinister Spies based on total players
@@ -347,8 +348,10 @@ export class GameService {
         }
 
         // For Sinister team
-        sinisterRoles.push('Sniper'); // Always include one Sniper
-        numSinisterSpy--;
+        if (optionalRoles.includeSniper) {
+            sinisterRoles.push('Sniper');
+            numSinisterSpy--;
+        }
 
         if (optionalRoles.includeNerlin) {
             sinisterRoles.push('Nerlin');
@@ -358,6 +361,13 @@ export class GameService {
         if (optionalRoles.includeDevSlayer) {
             sinisterRoles.push('DevSlayer');
             numSinisterSpy--;
+        }
+
+        // Special rule: If Sniper, Dev Slayer, and Nerlin are all included and there are only 3 sinister slots,
+        // then don't add any SinisterSpy
+        if (optionalRoles.includeSniper && optionalRoles.includeDevSlayer && optionalRoles.includeNerlin &&
+            sinisterRoles.length >= 3 && numSinisterSpy <= 0) {
+            numSinisterSpy = 0;
         }
 
         // Fill remaining Sinister slots with Sinister Spy

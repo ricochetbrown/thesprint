@@ -62,6 +62,13 @@ import { FormsModule } from "@angular/forms";
                                             <span class="font-medium">Dev Slayer</span> - Sinister team, appears as Duke to Support Manager
                                         </label>
                                     </div>
+
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="includeSniper" [checked]="includeSniper()" (change)="handleSniperChange($event)" class="mr-2">
+                                        <label for="includeSniper" class="cursor-pointer">
+                                            <span class="font-medium">Sniper</span> - Sinister team, can snipe the Duke if Dexter wins
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                         }
@@ -135,6 +142,7 @@ export class LobbyComponent implements OnInit {
     includeSupportManager = signal<boolean>(false);
     includeNerlin = signal<boolean>(false);
     includeDevSlayer = signal<boolean>(false);
+    includeSniper = signal<boolean>(false);
 
     objectKeys = Object.keys;
 
@@ -146,6 +154,7 @@ export class LobbyComponent implements OnInit {
             this.includeSupportManager.set(game.settings.optionalRoles.includeSupportManager);
             this.includeNerlin.set(game.settings.optionalRoles.includeNerlin);
             this.includeDevSlayer.set(game.settings.optionalRoles.includeDevSlayer);
+            this.includeSniper.set(game.settings.optionalRoles.includeSniper || false);
         }
     }
 
@@ -167,7 +176,8 @@ export class LobbyComponent implements OnInit {
                 includeDuke: this.includeDuke(),
                 includeSupportManager: this.includeSupportManager(),
                 includeNerlin: this.includeNerlin(),
-                includeDevSlayer: this.includeDevSlayer()
+                includeDevSlayer: this.includeDevSlayer(),
+                includeSniper: this.includeSniper()
             });
 
             // Then start the game
@@ -209,5 +219,10 @@ export class LobbyComponent implements OnInit {
     handleDevSlayerChange(event: Event) {
         const checked = (event.target as HTMLInputElement).checked;
         this.includeDevSlayer.set(checked);
+    }
+
+    handleSniperChange(event: Event) {
+        const checked = (event.target as HTMLInputElement).checked;
+        this.includeSniper.set(checked);
     }
 }

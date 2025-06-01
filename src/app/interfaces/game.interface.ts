@@ -30,6 +30,8 @@ export interface Game {
         playedBy: string;     // Player ID who played the card
         playedAt: Timestamp;  // When the card was played
     };
+    originalStoryNum?: number; // Original story number when PO card was played
+    poShiftedStories?: number[]; // Stories that have been completed due to PO card effect
     createdAt: Timestamp;
     updatedAt: Timestamp;
     currentTO_id?: string; // Technical Owner ID

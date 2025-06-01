@@ -1214,9 +1214,14 @@ export class GameService {
             // Add log entry for story change
             gameLogEntry.message += ` Switching to User Story ${nextStory}.`;
 
+            // Store the original story number and initialize poShiftedStories if not already set
+            const poShiftedStories = game.poShiftedStories || [];
+
             // Update the game state to move to the next story
             additionalUpdates = {
                 currentStoryNum: nextStory,
+                originalStoryNum: currentStory, // Store the original story number
+                poShiftedStories: poShiftedStories, // Initialize or maintain the poShiftedStories array
                 status: 'teamProposal', // Reset to team proposal phase for the new story
                 mission: null, // Clear the current mission
                 teamVote: null // Clear any team votes
@@ -1646,12 +1651,52 @@ export class GameService {
             return;
         }
 
-        const currentStoryNum = (game.currentStoryNum ?? 0) + 1;
+        // Check if we're in a shifted story due to PO card
+        let nextStoryNum: number;
+        let additionalLogMessage = '';
+
+        // If we have an original story number, we're in a shifted story due to PO card
+        if (game.originalStoryNum !== undefined) {
+            console.log("nextRound: Completing shifted story, returning to original story", game.originalStoryNum);
+
+            // Add the current story to the list of shifted stories that have been completed
+            const poShiftedStories = [...(game.poShiftedStories || []), game.currentStoryNum];
+
+            // Return to the original story
+            nextStoryNum = game.originalStoryNum;
+
+            additionalLogMessage = ` Returning to User Story #${nextStoryNum} after completing shifted story.`;
+
+            // Update the game with the completed shifted story
+            await this.firestoreService.updateDocument(
+                'games',
+                gameId,
+                {
+                    poShiftedStories: poShiftedStories,
+                    originalStoryNum: null // Clear the original story number
+                },
+                true
+            );
+        } else {
+            // Normal story progression
+            nextStoryNum = (game.currentStoryNum ?? 0) + 1;
+
+            // Check if we need to skip any stories that were already played due to PO card
+            if (game.poShiftedStories && game.poShiftedStories.length > 0) {
+                // Skip any stories that have already been played due to PO card
+                while (game.poShiftedStories.includes(nextStoryNum) && nextStoryNum <= (game.storiesTotal ?? 5)) {
+                    console.log("nextRound: Skipping already played story", nextStoryNum);
+                    additionalLogMessage = ` Skipping User Story #${nextStoryNum} as it was already played.`;
+                    nextStoryNum++;
+                }
+            }
+        }
+
         const totalStories = game.storiesTotal ?? 5;
 
-        console.log("nextRound: Current story", currentStoryNum, "of", totalStories);
+        console.log("nextRound: Next story", nextStoryNum, "of", totalStories);
 
-        if (currentStoryNum > totalStories) {
+        if (nextStoryNum > totalStories) {
             // Handle end of game if all stories are played
             // This might involve the assassination phase or declaring a winner based on mission results
             let winner: 'dexter' | 'sinister' | undefined = undefined;
@@ -1706,13 +1751,13 @@ export class GameService {
                     'games',
                     gameId,
                     {
-                        currentStoryNum: currentStoryNum,
+                        currentStoryNum: nextStoryNum,
                         currentTO_id: nextTOId,
                         voteFailsThisRound: 0,
                         teamVote: null, // Clear previous team vote data
                         mission: null, // Clear previous mission data
                         status: 'teamProposal', // Start the next round with team proposal
-                        gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: `Starting User Story #${currentStoryNum}. ${game.players[nextTOId]?.name || 'Next Team Leader'} is the Team Leader.` }],
+                        gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: `Starting User Story #${nextStoryNum}${additionalLogMessage}. ${game.players[nextTOId]?.name || 'Next Team Leader'} is the Team Leader.` }],
                     },
                     true
                 );

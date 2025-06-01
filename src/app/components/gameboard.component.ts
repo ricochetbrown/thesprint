@@ -46,6 +46,11 @@ import { FormsModule } from "@angular/forms";
                                     @if (isPlayerDukeForSupportManager(playerId, game)) {
                                         <span class="text-xs text-indigo-300 font-bold">(Duke)</span>
                                     }
+                                    @if (game.status === 'teamVoting' && game.teamVote?.votes) {
+                                        <span class="text-xs" [ngClass]="{'text-yellow-300': game.teamVote?.votes?.[playerId] === undefined, 'text-green-300': game.teamVote?.votes?.[playerId] === 'agree', 'text-red-300': game.teamVote?.votes?.[playerId] === 'rethrow'}">
+                                            {{ game.teamVote?.votes?.[playerId] ? (game.teamVote?.votes?.[playerId] === 'agree' ? 'Agreed' : 'Rethrow') : 'Not Voted' }}
+                                        </span>
+                                    }
                                 </div>
                             </div>
                         }
@@ -113,20 +118,7 @@ import { FormsModule } from "@angular/forms";
                                         <!-- Display only the proposed team members -->
                                         Proposed Team: <span class="font-bold">{{ getProposedTeamNames(game) }}</span>
 
-                                        <!-- Display voting status for all players -->
-                                        <div class="mt-2">
-                                            <p>Voting Status:</p>
-                                            @for (playerId of game.playerOrder; track playerId) {
-                                                <span [ngClass]="{'font-bold text-yellow-300': game.teamVote?.votes?.[playerId] === undefined, 'text-green-300': game.teamVote?.votes?.[playerId] === 'agree', 'text-red-300': game.teamVote?.votes?.[playerId] === 'rethrow'}">
-                                                    {{ game.players[playerId]?.name }}:
-                                                    {{ game.teamVote?.votes?.[playerId] ? (game.teamVote?.votes?.[playerId] === 'agree' ? 'Agreed' : 'Rethrow') : 'Not Voted' }}
-                                                    @if (!$last){
-                                                        ', '
-                                                    }
-                                                </span>
-                                            }
-                                        </div>
-
+                                        <!-- Voting status now displayed under each player's avatar -->
                                         <p class="mb-2">
                                             Votes Cast: {{ teamVoteCount() }} / {{ game.playerOrder.length }}
                                         </p>

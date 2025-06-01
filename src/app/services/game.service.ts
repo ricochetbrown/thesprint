@@ -1217,13 +1217,24 @@ export class GameService {
             // Store the original story number and initialize poShiftedStories if not already set
             const poShiftedStories = game.poShiftedStories || [];
 
-            // Update the game state to move to the next story
+            // Automatically form a team based on the next story's requirements
+            const playerIds = Object.keys(game.players);
+            const requiredTeamSize = this.getRequiredTeamSize(playerIds.length, nextStory);
+
+            // Select the team - for simplicity, we'll use the first N players where N is the required team size
+            // In a real implementation, the TO might want to select specific players
+            const missionTeam = playerIds.slice(0, requiredTeamSize);
+
+            // Add log entry for automatic team formation
+            gameLogEntry.message += ` The Technical Owner automatically formed a team of ${requiredTeamSize} players for the new story.`;
+
+            // Update the game state to move to the next story and skip straight to mission phase
             additionalUpdates = {
                 currentStoryNum: nextStory,
                 originalStoryNum: currentStory, // Store the original story number
                 poShiftedStories: poShiftedStories, // Initialize or maintain the poShiftedStories array
-                status: 'teamProposal', // Reset to team proposal phase for the new story
-                mission: null, // Clear the current mission
+                status: 'mission', // Go straight to mission phase, skipping team proposal and voting
+                mission: { team: missionTeam, cardsPlayed: {} }, // Set up the mission team directly
                 teamVote: null // Clear any team votes
             };
         }

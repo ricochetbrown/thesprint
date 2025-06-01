@@ -412,7 +412,7 @@ export class GameBoardComponent {
             } else if (myRole === 'SinisterSpy') {
                 return "assets/sinister.png";
             } else if (myRole === 'LoyalDexter') {
-                return "assets/technicalowner.png";
+                return "assets/dexter.png"; // Changed from technicalowner.png to dexter.png
             } else {
                 // Default for any other roles
                 return "assets/dexter.png";
@@ -424,6 +424,14 @@ export class GameBoardComponent {
             const myRole = game.roles[myId];
             const playerRole = game.roles[playerId];
 
+            // Duke sees Sinister players (except Nerlin) as sinister.png
+            if (myRole === 'Duke') {
+                if (playerRole === 'SinisterSpy' || playerRole === 'DevSlayer') {
+                    return "assets/sinister.png";
+                }
+                // Nerlin remains hidden from Duke and appears as dexter.png
+            }
+
             // Support Manager sees Dev Slayer as Duke
             if (myRole === 'SupportManager' && playerRole === 'DevSlayer') {
                 return "assets/the_duke.png";
@@ -432,6 +440,12 @@ export class GameBoardComponent {
             // Support Manager sees Duke as Duke
             if (myRole === 'SupportManager' && playerRole === 'Duke') {
                 return "assets/the_duke.png";
+            }
+
+            // Sinister players can see other Sinister players as sinister.png
+            if ((myRole === 'SinisterSpy' || myRole === 'DevSlayer' || myRole === 'Nerlin') &&
+                (playerRole === 'SinisterSpy' || playerRole === 'DevSlayer' || playerRole === 'Nerlin')) {
+                return "assets/sinister.png";
             }
         }
 

@@ -114,7 +114,8 @@ export class GameService {
             includeDuke: boolean,
             includeSupportManager: boolean,
             includeNerlin: boolean,
-            includeDevSlayer: boolean
+            includeDevSlayer: boolean,
+            includeSniper: boolean
         }
     ): Promise<string> {
         const currentUser = this.authService.currentUser();
@@ -133,7 +134,8 @@ export class GameService {
             includeDuke: true, // Duke is included by default
             includeSupportManager: false,
             includeNerlin: false,
-            includeDevSlayer: false
+            includeDevSlayer: false,
+            includeSniper: true
         };
 
         const gameData: Omit<Game, 'id' | 'createdAt' | 'updatedAt'> = { // Firestore service adds timestamps

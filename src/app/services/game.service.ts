@@ -1203,8 +1203,8 @@ export class GameService {
         // Handle specific card effects
         let additionalUpdates = {};
 
-        if (cardId === 'po') {
-            // "PO" - "Shifting Priorities" card effect:
+        if (cardInfo.name === 'Shifting Priorities') {
+            // "Shifting Priorities" card effect:
             // Switch to the next User Story
             const nextStory = currentStory + 1;
             if (nextStory > 5) {

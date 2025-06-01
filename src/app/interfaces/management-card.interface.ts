@@ -19,5 +19,112 @@ export const MANAGEMENT_CARDS: { [key: string]: ManagementCard } = {
         playableStories: [1, 2, 3],
         imageUrl: 'assets/management/po.png'
     },
-    // Other cards will be added here
+    'ceo': {
+        id: 'ceo',
+        title: 'PO',
+        name: 'Shifting Priorities',
+        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
+        playablePhases: ['mission'],
+        playableStories: [1, 2, 3],
+        imageUrl: 'assets/management/po.png'
+    },
+    'cmo': {
+        id: 'cmo',
+        title: 'PO',
+        name: 'Shifting Priorities',
+        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
+        playablePhases: ['mission'],
+        playableStories: [1, 2, 3],
+        imageUrl: 'assets/management/po.png'
+    },
+    'coo': {
+        id: 'coo',
+        title: 'PO',
+        name: 'Shifting Priorities',
+        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
+        playablePhases: ['mission'],
+        playableStories: [1, 2, 3],
+        imageUrl: 'assets/management/po.png'
+    },
+    'cso': {
+        id: 'cso',
+        title: 'PO',
+        name: 'Shifting Priorities',
+        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
+        playablePhases: ['mission'],
+        playableStories: [1, 2, 3],
+        imageUrl: 'assets/management/po.png'
+    },
+    'cto': {
+        id: 'cto',
+        title: 'PO',
+        name: 'Shifting Priorities',
+        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
+        playablePhases: ['mission'],
+        playableStories: [1, 2, 3],
+        imageUrl: 'assets/management/po.png'
+    },
+    'hr': {
+        id: 'hr',
+        title: 'PO',
+        name: 'Shifting Priorities',
+        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
+        playablePhases: ['mission'],
+        playableStories: [1, 2, 3],
+        imageUrl: 'assets/management/po.png'
+    },
+    'janitor': {
+        id: 'janitor',
+        title: 'PO',
+        name: 'Shifting Priorities',
+        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
+        playablePhases: ['mission'],
+        playableStories: [1, 2, 3],
+        imageUrl: 'assets/management/po.png'
+    },
+    'joe': {
+        id: 'joe',
+        title: 'PO',
+        name: 'Shifting Priorities',
+        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
+        playablePhases: ['mission'],
+        playableStories: [1, 2, 3],
+        imageUrl: 'assets/management/po.png'
+    },
+    'mat': {
+        id: 'mat',
+        title: 'PO',
+        name: 'Shifting Priorities',
+        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
+        playablePhases: ['mission'],
+        playableStories: [1, 2, 3],
+        imageUrl: 'assets/management/po.png'
+    },
+    'salesrep': {
+        id: 'salesrep',
+        title: 'PO',
+        name: 'Shifting Priorities',
+        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
+        playablePhases: ['mission'],
+        playableStories: [1, 2, 3],
+        imageUrl: 'assets/management/po.png'
+    },
+    'sme': {
+        id: 'sme',
+        title: 'PO',
+        name: 'Shifting Priorities',
+        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
+        playablePhases: ['mission'],
+        playableStories: [1, 2, 3],
+        imageUrl: 'assets/management/po.png'
+    },
+    'vpsales': {
+        id: 'vpsales',
+        title: 'PO',
+        name: 'Shifting Priorities',
+        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
+        playablePhases: ['mission'],
+        playableStories: [1, 2, 3],
+        imageUrl: 'assets/management/po.png'
+    }
 };

@@ -42,11 +42,11 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                     }
                                     <!-- Team member overlay (for both proposed and approved teams) -->
                                     @if (game.mission?.team?.includes(playerId) || game.teamVote?.proposedTeam?.includes(playerId)) {
-                                        <img src="assets/supercoder.png" alt="Team" class="absolute top-0 left-0 w-8 h-8 md:w-10 md:h-10">
+                                        <img src="assets/supercoder.png" alt="Team" class="absolute top-0 left-[-5px] w-8 h-[2rem] md:w-10 md:h-10">
                                     }
                                     <!-- Management designated player overlay -->
                                     @if (playerId === game.managementDesignatedPlayer) {
-                                        <img src="assets/guido.png" alt="Management" class="absolute top-[-10px] h-[4rem] w-[2rem]">
+                                        <img src="assets/guido.png" alt="Management" class="absolute top-[-10px] left-[-5px] h-[4rem] w-[2rem]">
                                     }
                                 </div>
                                 <div class="text-center">

@@ -25,20 +25,24 @@ import { FormsModule } from "@angular/forms";
                 <div class="flex-grow container mx-auto p-4">
                     <div class="flex flex-wrap justify-center items-center gap-2 md:gap-4 p-2 md:p-4 mb-4">
                         @for (playerId of game.playerOrder; track playerId) {
-                            <div class="p-2 rounded-full text-center w-20 h-20 md:w-24 md:h-24 flex flex-col justify-center items-center border-2"
-                                 [ngClass]="{
-                                    'border-yellow-400 shadow-yellow-400/50 shadow-lg': playerId === game.currentTO_id,
-                                    'border-gray-600': playerId !== game.currentTO_id,
-                                    'border-indigo-600 shadow-indigo-400/50 shadow-lg': isPlayerDukeForSupportManager(playerId, game)
-                                 }">
-                                <img [src]="getPlayerAvatarUrl(playerId, game)" alt="P" class="w-8 h-8 md:w-10 md:h-10 rounded-full mb-1">
-                                <span class="text-xs md:text-sm truncate w-full">{{ game.players[playerId].name }}</span>
-                                @if (playerId === authService.userId()) {
-                                    <span class="text-xs text-yellow-300">(You)</span>
-                                }
-                                @if (isPlayerDukeForSupportManager(playerId, game)) {
-                                    <span class="text-xs text-indigo-300 font-bold">(Duke)</span>
-                                }
+                            <div class="flex flex-col items-center">
+                                <div class="rounded-full text-center w-20 h-20 md:w-24 md:h-24 flex justify-center items-center border-2 mb-1"
+                                     [ngClass]="{
+                                        'border-yellow-400 shadow-yellow-400/50 shadow-lg': playerId === game.currentTO_id,
+                                        'border-gray-600': playerId !== game.currentTO_id,
+                                        'border-indigo-600 shadow-indigo-400/50 shadow-lg': isPlayerDukeForSupportManager(playerId, game)
+                                     }">
+                                    <img [src]="getPlayerAvatarUrl(playerId, game)" alt="P" class="w-16 h-16 md:w-20 md:h-20 rounded-full">
+                                </div>
+                                <div class="text-center">
+                                    <span class="text-xs md:text-sm truncate w-full block">{{ game.players[playerId].name }}</span>
+                                    @if (playerId === authService.userId()) {
+                                        <span class="text-xs text-yellow-300">(You)</span>
+                                    }
+                                    @if (isPlayerDukeForSupportManager(playerId, game)) {
+                                        <span class="text-xs text-indigo-300 font-bold">(Duke)</span>
+                                    }
+                                </div>
                             </div>
                         }
                     </div>
@@ -151,13 +155,16 @@ import { FormsModule } from "@angular/forms";
                                                 <div class="font-bold">APPROVE</div>
                                             </button>
                                             <button (click)="gameService.submitMissionCard('request')"
-                                                    [disabled]="!!game.mission?.cardsPlayed?.[authService.userId()!]"
+                                                    [disabled]="!!game.mission?.cardsPlayed?.[authService.userId()!] || (game.roles && (game.roles[authService.userId()!] === 'LoyalDexter' || game.roles[authService.userId()!] === 'Duke' || game.roles[authService.userId()!] === 'SupportManager'))"
                                                     class="p-4 rounded w-24 h-32 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center"
                                                     style="background-image: url('assets/cardback_texture.png'); background-size: cover; color: white; text-shadow: 1px 1px 2px black;">
                                                 <div class="mb-2">
                                                     <img [src]="getPlayerAvatarUrl(authService.userId()!, game)" alt="Character" class="w-12 h-12 rounded-full">
                                                 </div>
                                                 <div class="font-bold">REQUEST CHANGES</div>
+                                                @if (game.roles && (game.roles[authService.userId()!] === 'LoyalDexter' || game.roles[authService.userId()!] === 'Duke' || game.roles[authService.userId()!] === 'SupportManager')) {
+                                                    <div class="text-xs text-red-300 mt-1">Not allowed for Dexter players</div>
+                                                }
                                             </button>
                                         </div>
                                         <p class="mt-4 text-sm">

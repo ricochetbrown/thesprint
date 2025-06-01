@@ -125,7 +125,7 @@ export class GameService {
 
         const hostPlayer: Player = {
             id: currentUserId,
-            name: currentUser.displayName || currentUser.email || 'Host Player',
+            name: currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : 'Host Player'),
             isHost: true
         };
 
@@ -179,7 +179,7 @@ export class GameService {
 
         const newPlayer: Player = {
             id: currentUserId,
-            name: currentUser.displayName || currentUser.email || `Player ${Object.keys(game.players).length + 1}`
+            name: currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : `Player ${Object.keys(game.players).length + 1}`)
         };
 
         const updatedPlayers = { ...game.players, [currentUserId]: newPlayer };

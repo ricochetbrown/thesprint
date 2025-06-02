@@ -1259,6 +1259,25 @@ export class GameService {
             discardedManagementCards: discardedCards,
             gameLog: [...(game.gameLog || []), gameLogEntry]
         }, true);
+
+        // Give AI players a chance to play their management cards
+        setTimeout(async () => {
+            await this.aiPlayManagementCard();
+
+            // After AI players have had a chance to play their management cards,
+            // allow AI players on the mission team to submit their mission cards
+            const currentGame = this.currentGame();
+            if (currentGame && currentGame.status === 'mission' && currentGame.mission?.team) {
+                const aiPlayersOnMission = currentGame.mission.team.filter(playerId =>
+                    playerId.startsWith(gameId + '-AI-')
+                );
+
+                if (aiPlayersOnMission.length > 0) {
+                    console.log(`skipPlayingManagementCard: Triggering ${aiPlayersOnMission.length} AI players to submit mission cards`);
+                    await this.submitAllAIMissionCards(aiPlayersOnMission);
+                }
+            }
+        }, 500);
     }
 
     // Function to skip drawing a management card

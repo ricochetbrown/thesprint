@@ -143,6 +143,35 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                     <!-- Removed duplicate Propose Team button -->
                                 </div>
                             }
+                            @case ('shiftingPriorities') {
+                                <div>
+                                    @if (authService.userId() === game.currentTO_id) {
+                                        <p class="mb-2">
+                                            You are the TO. The Shifting Priorities card has been played.
+                                            Select {{ game.teamProposal?.numToSelect }} players for User Story OD-{{game.currentStoryNum}}.
+                                        </p>
+                                        <div class="flex flex-wrap gap-2 mb-4">
+                                            @for (playerId of game.playerOrder; track playerId) {
+                                                <button class="px-3 py-1 rounded"
+                                                        [ngClass]="{'bg-blue-500 text-white': selectedPlayers.includes(playerId), 'bg-gray-300 text-black': !selectedPlayers.includes(playerId)}"
+                                                        (click)="togglePlayerSelection(playerId, game)">
+                                                        {{ game.players[playerId]?.name }}
+                                                </button>
+                                            }
+                                        </div>
+
+                                        <button (click)="submitShiftingPrioritiesTeam(game)"
+                                                [disabled]="selectedPlayers.length !== game.teamProposal?.numToSelect"
+                                                class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded disabled:opacity-50 disabled:cursor-not-allowed">
+                                                Submit Team
+                                        </button>
+                                    } @else {
+                                        <p class="mb-2">
+                                            The Shifting Priorities card has been played. Waiting for {{ game.players[game.currentTO_id!].name }} (TO) to select a team for User Story OD-{{game.currentStoryNum}}.
+                                        </p>
+                                    }
+                                </div>
+                            }
                             @case ('teamVoting') {
                                 <div>
                                     <p class="mb-2">Team proposed by {{ game.players[game.currentTO_id!].name }}. Vote:</p>
@@ -484,6 +513,7 @@ export class GameBoardComponent {
             case 'mission': return 'Review';
             case 'results': return 'Results';
             case 'gameOver': return 'Game Over';
+            case 'shiftingPriorities': return 'Shifting Priorities - Team Selection';
             default: return status.charAt(0).toUpperCase() + status.slice(1);
         }
     }
@@ -568,6 +598,11 @@ export class GameBoardComponent {
         // Convert selectedPlayers IDs to Player objects
         const selectedTeam = this.selectedPlayers.map(playerId => game.players[playerId]);
         this.gameService.proposeTeam(selectedTeam, undefined, this.managementDesignatedPlayer || undefined);
+    }
+
+    submitShiftingPrioritiesTeam(game: Game): void {
+        console.log("Submit Shifting Priorities Team clicked");
+        this.gameService.submitShiftingPrioritiesTeam(this.selectedPlayers);
     }
 
     toggleManagementDesignation(playerId: string): void {

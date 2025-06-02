@@ -447,6 +447,43 @@ export class GameService {
         return assignedRoles;
     }
 
+    async submitShiftingPrioritiesTeam(teamPlayerIds: string[]): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = this.authService.userId();
+
+        console.log("submitShiftingPrioritiesTeam called with", { teamPlayerIds, currentUserId });
+
+        if (!gameId || !game || !currentUserId) {
+            throw new Error("Game or user not available.");
+        }
+
+        // 1. Check if the current user is the current Team Leader (TO).
+        if (game.currentTO_id !== currentUserId) {
+            console.error("submitShiftingPrioritiesTeam: User is not the current TO", { currentUserId, currentTO_id: game.currentTO_id });
+            throw new Error("Only the current Team Leader can select the team.");
+        }
+
+        // 2. Check if the number of selected players is correct for the current story.
+        const requiredTeamSize = game.teamProposal?.numToSelect || 0;
+        if (teamPlayerIds.length !== requiredTeamSize) {
+            throw new Error(`Incorrect team size. Story ${game.currentStoryNum} requires a team of ${requiredTeamSize} players.`);
+        }
+
+        // Update the game state to transition to the mission phase
+        await this.firestoreService.updateDocument('games', gameId, {
+            status: 'mission',
+            mission: {
+                team: teamPlayerIds,
+                cardsPlayed: {}
+            },
+            gameLog: [...(game.gameLog || []), {
+                timestamp: new Date(),
+                message: `${game.players[currentUserId]?.name || 'Team Leader'} selected a team of ${teamPlayerIds.length} for story ${game.currentStoryNum} after Shifting Priorities was played.`
+            }]
+        }, true);
+    }
+
     async proposeTeam(team: Player[], overrideUserId?: string, managementDesignatedPlayerId?: string): Promise<void> {
         const gameId = this.activeGameId();
         const game = this.currentGame();
@@ -1229,38 +1266,19 @@ export class GameService {
             // Get the current mission team if available
             const currentMissionTeam = game.mission?.team || [];
 
-            // For simplicity, we'll automatically form a team based on the required size
-            // In a real implementation, the TO might want to select specific players
-            let missionTeam = [...currentMissionTeam];
+            // Instead of automatically forming a team, we'll transition to a new phase
+            // where the Technical Owner can select players for the team
+            gameLogEntry.message += ` The Technical Owner needs to select ${requiredTeamSize} players for the new story.`;
 
-            // Adjust the team size to match the requirements
-            if (missionTeam.length < requiredTeamSize) {
-                // Add players to the team
-                const availablePlayers = playerIds.filter(id => !missionTeam.includes(id));
-                while (missionTeam.length < requiredTeamSize && availablePlayers.length > 0) {
-                    const randomIndex = Math.floor(Math.random() * availablePlayers.length);
-                    missionTeam.push(availablePlayers[randomIndex]);
-                    availablePlayers.splice(randomIndex, 1);
-                }
-            } else if (missionTeam.length > requiredTeamSize) {
-                // Remove players from the team
-                while (missionTeam.length > requiredTeamSize) {
-                    const randomIndex = Math.floor(Math.random() * missionTeam.length);
-                    missionTeam.splice(randomIndex, 1);
-                }
-            }
-
-            gameLogEntry.message += ` The Technical Owner automatically adjusted the team to ${requiredTeamSize} players for the new story.`;
-
-            // Update the game state to move to the next story and go straight to mission phase
+            // Update the game state to move to the next story and transition to the shiftingPriorities phase
             additionalUpdates = {
                 currentStoryNum: nextStory,
                 originalStoryNum: currentStory, // Store the original story number
-                poShiftedStories: poShiftedStories, // Initialize or maintain the poShiftedStories array
-                status: 'mission', // Go straight to mission phase
-                mission: {
-                    team: missionTeam, // Use the adjusted mission team
-                    cardsPlayed: {}
+                poShiftedStories: [...poShiftedStories, nextStory], // Add the next story to the shifted stories array
+                status: 'shiftingPriorities', // Transition to the shiftingPriorities phase
+                teamProposal: {
+                    numToSelect: requiredTeamSize,
+                    selectedPlayers: [] // Start with an empty selection
                 },
                 teamVote: null // Clear any team votes
             };
@@ -1734,15 +1752,25 @@ export class GameService {
 
         // If we have an original story number, we're in a shifted story due to PO card
         if (game.originalStoryNum !== undefined) {
-            console.log("nextRound: Completing shifted story, returning to original story", game.originalStoryNum);
+            console.log("nextRound: Completing shifted story, proceeding to next story after original story", game.originalStoryNum);
 
             // Add the current story to the list of shifted stories that have been completed
             const poShiftedStories = [...(game.poShiftedStories || []), game.currentStoryNum];
 
-            // Return to the original story
-            nextStoryNum = game.originalStoryNum;
+            // Proceed to the next story after the original story
+            nextStoryNum = game.originalStoryNum + 1;
 
-            additionalLogMessage = ` Returning to User Story #${nextStoryNum} after completing shifted story.`;
+            // Check if we need to skip any stories that were already played due to PO card
+            if (poShiftedStories.length > 0) {
+                // Skip any stories that have already been played due to PO card
+                while (poShiftedStories.includes(nextStoryNum) && nextStoryNum <= (game.storiesTotal ?? 5)) {
+                    console.log("nextRound: Skipping already played story", nextStoryNum);
+                    additionalLogMessage = ` Skipping User Story #${nextStoryNum} as it was already played.`;
+                    nextStoryNum++;
+                }
+            }
+
+            additionalLogMessage = ` Proceeding to User Story #${nextStoryNum} after completing shifted story.`;
 
             // Update the game with the completed shifted story
             await this.firestoreService.updateDocument(

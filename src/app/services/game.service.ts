@@ -1210,6 +1210,57 @@ export class GameService {
         }
     }
 
+    // Function to skip playing a management card
+    async skipPlayingManagementCard(): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = this.authService.userId();
+
+        if (!gameId || !game || !currentUserId) {
+            throw new Error("Game or user not available.");
+        }
+
+        // Get the current player
+        const player = game.players[currentUserId];
+        if (!player) {
+            throw new Error("Player not found.");
+        }
+
+        // Check if the player has a management card
+        if (!player.managementCard) {
+            throw new Error("You don't have a management card to skip playing.");
+        }
+
+        // Add a log entry
+        const gameLogEntry = {
+            timestamp: new Date(),
+            message: `${player.name} chose not to play their management card.`
+        };
+
+        // Add the card to the discard pile
+        const cardId = player.managementCard;
+        const discardedCard = {
+            cardId: cardId,
+            playedBy: currentUserId,
+            discardedAt: new Date()
+        };
+        const discardedCards = [...(game.discardedManagementCards || []), discardedCard];
+
+        // Update the player's management card (remove it)
+        const updatedPlayers = { ...game.players };
+        updatedPlayers[currentUserId] = {
+            ...player,
+            managementCard: null
+        };
+
+        // Update the game
+        await this.firestoreService.updateDocument('games', gameId, {
+            players: updatedPlayers,
+            discardedManagementCards: discardedCards,
+            gameLog: [...(game.gameLog || []), gameLogEntry]
+        }, true);
+    }
+
     // Function to skip drawing a management card
     async skipManagementCard(): Promise<void> {
         const gameId = this.activeGameId();
@@ -1318,6 +1369,14 @@ export class GameService {
             playedAt: new Date()
         };
 
+        // Add the card to the discard pile
+        const discardedCard = {
+            cardId: cardId,
+            playedBy: currentUserId,
+            discardedAt: new Date()
+        };
+        const discardedCards = [...(game.discardedManagementCards || []), discardedCard];
+
         // Handle specific card effects
         let additionalUpdates = {};
 
@@ -1347,14 +1406,18 @@ export class GameService {
             // Get the current mission team if available
             const currentMissionTeam = game.mission?.team || [];
 
-            // Calculate the new team size (current team size + 1)
-            // The TO must keep the current team and add one more player
-            const newTeamSize = currentMissionTeam.length + 1;
+            // Calculate the new team size
+            let newTeamSize = currentMissionTeam.length;
 
-            // Make sure the new team size doesn't exceed the required team size for the story
-            if (newTeamSize > requiredTeamSize) {
-                throw new Error(`Cannot add another player to the team. The current team already has ${currentMissionTeam.length} players, and the new story requires ${requiredTeamSize} players.`);
+            // If the current team size is less than the required team size, add players
+            if (currentMissionTeam.length < requiredTeamSize) {
+                // The TO must keep the current team and add players
+                newTeamSize = requiredTeamSize;
+            } else if (currentMissionTeam.length > requiredTeamSize) {
+                // If the current team size is greater than the required team size, we can't proceed
+                throw new Error(`Cannot reduce the team size. The current team has ${currentMissionTeam.length} players, and the new story requires ${requiredTeamSize} players.`);
             }
+            // If the current team size equals the required team size, keep the current team
 
             // Instead of automatically forming a team, we'll transition to a new phase
             // where the Technical Owner can select players for the team
@@ -1417,6 +1480,7 @@ export class GameService {
         await this.firestoreService.updateDocument('games', gameId, {
             players: updatedPlayers,
             playedManagementCard: playedCard,
+            discardedManagementCards: discardedCards,
             managementCardPlayPhase: false, // End the management card play phase
             gameLog: [...(game.gameLog || []), gameLogEntry],
             ...additionalUpdates

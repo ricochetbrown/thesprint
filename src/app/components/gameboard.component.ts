@@ -255,10 +255,16 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                                 <div>
                                                     <p class="mb-2 font-semibold">{{ MANAGEMENT_CARDS[getPlayerManagementCard(authService.userId()!, game)!]?.title }} - {{ MANAGEMENT_CARDS[getPlayerManagementCard(authService.userId()!, game)!]?.name }}</p>
                                                     <p class="mb-2 text-sm">{{ MANAGEMENT_CARDS[getPlayerManagementCard(authService.userId()!, game)!]?.instructions }}</p>
-                                                    <button (click)="gameService.playManagementCard()"
-                                                            class="bg-purple-500 hover:bg-purple-600 px-4 py-2 rounded">
-                                                        Play Card
-                                                    </button>
+                                                    <div class="flex gap-2">
+                                                        <button (click)="gameService.playManagementCard()"
+                                                                class="bg-purple-500 hover:bg-purple-600 px-4 py-2 rounded">
+                                                            Play Card
+                                                        </button>
+                                                        <button (click)="gameService.skipPlayingManagementCard()"
+                                                                class="bg-gray-500 hover:bg-gray-600 px-4 py-2 rounded">
+                                                            Skip
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -403,6 +409,25 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                 </div>
                             }
                         </div>
+
+                        <!-- Discarded Management Cards Section -->
+                        @if (game.discardedManagementCards && game.discardedManagementCards.length > 0) {
+                            <div class="mb-4">
+                                <h3 class="text-xl font-bold mb-2 border-b border-gray-700 pb-2">Discarded Management Cards</h3>
+                                @for (card of game.discardedManagementCards; track $index) {
+                                    <div class="bg-slate-800 p-3 rounded-lg mb-2">
+                                        <div class="flex items-start gap-2">
+                                            <img [src]="'assets/management/' + card.cardId + '.png'"
+                                                 alt="Discarded Card" class="w-12 h-18 flex-shrink-0">
+                                            <div>
+                                                <h4 class="font-semibold">{{ MANAGEMENT_CARDS[card.cardId]?.title }} - {{ MANAGEMENT_CARDS[card.cardId]?.name }}</h4>
+                                                <p class="text-xs text-gray-300">Played by {{ game.players[card.playedBy]?.name || 'Unknown' }}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
 
                         <!-- All Roles Section -->
                         <div>

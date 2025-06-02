@@ -30,6 +30,11 @@ export interface Game {
         playedBy: string;     // Player ID who played the card
         playedAt: Timestamp;  // When the card was played
     };
+    discardedManagementCards?: {
+        cardId: string;       // ID of the discarded card (e.g., 'po', 'ceo')
+        playedBy: string;     // Player ID who played/discarded the card
+        discardedAt: Timestamp; // When the card was discarded
+    }[];
     originalStoryNum?: number; // Original story number when PO card was played
     poShiftedStories?: number[]; // Stories that have been completed due to PO card effect
     createdAt: Timestamp;

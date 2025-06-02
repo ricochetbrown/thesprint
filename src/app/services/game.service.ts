@@ -1837,7 +1837,17 @@ export class GameService {
 
             // Determine if the mission succeeded or failed
             // In "The Sprint", any 'request' card causes the mission to fail
-            const missionResult: 'dexter' | 'sinister' = requestCount > 0 ? 'sinister' : 'dexter';
+            // Even if a Team Lead card's preliminary review designated a player who chose to merge the mission
+            let missionResult: 'dexter' | 'sinister' = requestCount > 0 ? 'sinister' : 'dexter';
+
+            // Check if there's a preliminary review and the designated player chose to merge
+            if (latestGame.preliminaryReview && latestGame.preliminaryReview.action === 'merge') {
+                // If there are request cards, the mission should still fail regardless of the preliminary review
+                if (requestCount > 0) {
+                    missionResult = 'sinister';
+                    console.log("checkIfAllCardsPlayed: Preliminary review chose to merge, but there are request cards, so the mission fails");
+                }
+            }
 
             // Update the story results
             const storyResults = [...(latestGame.storyResults || [])];
@@ -1849,6 +1859,11 @@ export class GameService {
                 additionalLogMessage = `Mission succeeded with ${approveCount} approve cards and ${requestCount} request cards. Dexter wins this story!`;
             } else {
                 additionalLogMessage = `Mission failed with ${requestCount} request cards. Sinister wins this story!`;
+                // Add clarification if there was a preliminary review that chose to merge
+                if (latestGame.preliminaryReview && latestGame.preliminaryReview.action === 'merge' && requestCount > 0) {
+                    const designatedPlayerName = latestGame.players[latestGame.preliminaryReview.designatedPlayerId]?.name || 'Unknown';
+                    additionalLogMessage += ` ${designatedPlayerName} had to have requested changes on the mission since there were ${requestCount} request cards.`;
+                }
             }
 
             // Check if the game is over

@@ -1670,6 +1670,84 @@ export class GameService {
                     timestamp: Timestamp.now()
                 }
             };
+        } else if (cardInfo.name === 'The Real Boss!') {
+            // "The Real Boss!" card effect:
+            // Take another player's management card or draw two cards from the management deck, keeping one
+
+            // Save the current game status to return to after the CEO card effect is resolved
+            const previousStatus = game.status;
+
+            // Check if any other players have management cards
+            const playersWithCards = Object.keys(game.players).filter(id => {
+                return id !== currentUserId && game.players[id].managementCard !== null && game.players[id].managementCard !== undefined;
+            });
+
+            // Add log entry for the CEO card
+            if (playersWithCards.length > 0) {
+                gameLogEntry.message += ` ${player.name} can now take another player's management card.`;
+            } else {
+                gameLogEntry.message += ` ${player.name} can now draw two cards from the management deck, keeping one.`;
+            }
+
+            // Update the game state to transition to the ceoCardPlay phase
+            additionalUpdates = {
+                status: 'ceoCardPlay',
+                ceoCardPlayerId: currentUserId,
+                previousStatus: previousStatus // Store the previous status to return to after the CEO card effect is resolved
+            };
+
+            // If this is an AI player, handle the CEO card automatically after a short delay
+            if (currentUserId.startsWith(gameId + '-AI-')) {
+                // AI logic for CEO card would go here
+                // For now, we'll just have the AI draw two cards and keep the first one
+                setTimeout(async () => {
+                    // Draw two cards
+                    const availableCards = game.managementDeck || [];
+                    if (availableCards.length < 2) {
+                        // Not enough cards in the deck, just return to the previous status
+                        await this.firestoreService.updateDocument('games', gameId, {
+                            status: previousStatus,
+                            ceoCardPlayerId: null
+                        }, true);
+                        return;
+                    }
+
+                    // Draw two cards
+                    const drawnCards = [availableCards[0], availableCards[1]];
+                    const remainingDeck = availableCards.slice(2);
+
+                    // AI always keeps the first card
+                    const selectedCard = drawnCards[0];
+                    const discardedCard = drawnCards[1];
+
+                    // Update the player's management card
+                    const updatedPlayers = { ...game.players };
+                    updatedPlayers[currentUserId] = {
+                        ...player,
+                        managementCard: selectedCard
+                    };
+
+                    // Add the discarded card to the discard pile
+                    const discardedCards = [...(game.discardedManagementCards || []), {
+                        cardId: discardedCard,
+                        playedBy: currentUserId,
+                        discardedAt: new Date()
+                    }];
+
+                    // Update the game
+                    await this.firestoreService.updateDocument('games', gameId, {
+                        status: previousStatus,
+                        ceoCardPlayerId: null,
+                        players: updatedPlayers,
+                        managementDeck: remainingDeck,
+                        discardedManagementCards: discardedCards,
+                        gameLog: [...(game.gameLog || []), {
+                            timestamp: new Date(),
+                            message: `${player.name} drew two cards and kept the ${MANAGEMENT_CARDS[selectedCard]?.title} card.`
+                        }]
+                    }, true);
+                }, 1000);
+            }
         }
 
         // Update the game
@@ -2306,5 +2384,177 @@ export class GameService {
             console.error("Error deleting all games:", error);
             throw error;
         }
+    }
+
+    // Function to take a management card from another player (CEO card effect)
+    async takeCEOManagementCard(targetPlayerId: string, cardId: string): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = this.authService.userId();
+
+        if (!gameId || !game || !currentUserId) {
+            throw new Error("Game or user not available.");
+        }
+
+        // Check if we're in the CEO card play phase
+        if (game.status !== 'ceoCardPlay' || game.ceoCardPlayerId !== currentUserId) {
+            throw new Error("You cannot take a management card at this time.");
+        }
+
+        // Get the target player
+        const targetPlayer = game.players[targetPlayerId];
+        if (!targetPlayer) {
+            throw new Error("Target player not found.");
+        }
+
+        // Check if the target player has the specified management card
+        if (targetPlayer.managementCard !== cardId) {
+            throw new Error("Target player does not have the specified management card.");
+        }
+
+        // Get the current player
+        const currentPlayer = game.players[currentUserId];
+        if (!currentPlayer) {
+            throw new Error("Current player not found.");
+        }
+
+        // Update the players' management cards
+        const updatedPlayers = { ...game.players };
+        updatedPlayers[currentUserId] = {
+            ...currentPlayer,
+            managementCard: cardId
+        };
+        updatedPlayers[targetPlayerId] = {
+            ...targetPlayer,
+            managementCard: null
+        };
+
+        // Add a log entry
+        const gameLogEntry = {
+            timestamp: new Date(),
+            message: `${currentPlayer.name} took the ${MANAGEMENT_CARDS[cardId]?.title} card from ${targetPlayer.name}.`
+        };
+
+        // Get the previous status to return to
+        const previousStatus = game.previousStatus || 'mission';
+
+        // Update the game
+        await this.firestoreService.updateDocument('games', gameId, {
+            status: previousStatus,
+            ceoCardPlayerId: null,
+            players: updatedPlayers,
+            gameLog: [...(game.gameLog || []), gameLogEntry]
+        }, true);
+    }
+
+    // Function to draw two cards from the management deck (CEO card effect)
+    async drawCEOCards(): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = this.authService.userId();
+
+        if (!gameId || !game || !currentUserId) {
+            throw new Error("Game or user not available.");
+        }
+
+        // Check if we're in the CEO card play phase
+        if (game.status !== 'ceoCardPlay' || game.ceoCardPlayerId !== currentUserId) {
+            throw new Error("You cannot draw CEO cards at this time.");
+        }
+
+        // Get the available cards
+        const availableCards = game.managementDeck || [];
+        if (availableCards.length < 2) {
+            throw new Error("Not enough cards in the management deck.");
+        }
+
+        // Draw two cards
+        const drawnCards = [availableCards[0], availableCards[1]];
+        const remainingDeck = availableCards.slice(2);
+
+        // Add a log entry
+        const gameLogEntry = {
+            timestamp: new Date(),
+            message: `${game.players[currentUserId].name} drew two cards from the management deck.`
+        };
+
+        // Update the game
+        await this.firestoreService.updateDocument('games', gameId, {
+            ceoCardDrawnCards: drawnCards,
+            managementDeck: remainingDeck,
+            gameLog: [...(game.gameLog || []), gameLogEntry]
+        }, true);
+    }
+
+    // Function to select one of the drawn cards to keep (CEO card effect)
+    async selectCEOCard(cardId: string): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = this.authService.userId();
+
+        if (!gameId || !game || !currentUserId) {
+            throw new Error("Game or user not available.");
+        }
+
+        // Check if we're in the CEO card play phase
+        if (game.status !== 'ceoCardPlay' || game.ceoCardPlayerId !== currentUserId) {
+            throw new Error("You cannot select a CEO card at this time.");
+        }
+
+        // Check if we have drawn cards
+        if (!game.ceoCardDrawnCards || game.ceoCardDrawnCards.length < 2) {
+            throw new Error("No cards have been drawn.");
+        }
+
+        // Check if the selected card is one of the drawn cards
+        if (!game.ceoCardDrawnCards.includes(cardId)) {
+            throw new Error("Selected card is not one of the drawn cards.");
+        }
+
+        // Get the current player
+        const currentPlayer = game.players[currentUserId];
+        if (!currentPlayer) {
+            throw new Error("Current player not found.");
+        }
+
+        // Get the other card (the one not selected)
+        const otherCard = game.ceoCardDrawnCards.find(card => card !== cardId);
+        if (!otherCard) {
+            throw new Error("Could not find the other card.");
+        }
+
+        // Update the player's management card
+        const updatedPlayers = { ...game.players };
+        updatedPlayers[currentUserId] = {
+            ...currentPlayer,
+            managementCard: cardId
+        };
+
+        // Add the other card to the discard pile
+        const discardedCard = {
+            cardId: otherCard,
+            playedBy: currentUserId,
+            discardedAt: new Date()
+        };
+        const discardedCards = [...(game.discardedManagementCards || []), discardedCard];
+
+        // Add a log entry
+        const gameLogEntry = {
+            timestamp: new Date(),
+            message: `${currentPlayer.name} kept the ${MANAGEMENT_CARDS[cardId]?.title} card and discarded the ${MANAGEMENT_CARDS[otherCard]?.title} card.`
+        };
+
+        // Get the previous status to return to
+        const previousStatus = game.previousStatus || 'mission';
+
+        // Update the game
+        await this.firestoreService.updateDocument('games', gameId, {
+            status: previousStatus,
+            ceoCardPlayerId: null,
+            ceoCardDrawnCards: null,
+            players: updatedPlayers,
+            discardedManagementCards: discardedCards,
+            gameLog: [...(game.gameLog || []), gameLogEntry]
+        }, true);
     }
 }

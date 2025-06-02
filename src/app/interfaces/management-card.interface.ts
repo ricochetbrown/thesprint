@@ -30,12 +30,12 @@ export const MANAGEMENT_CARDS: { [key: string]: ManagementCard } = {
     },
     'ceo': {
         id: 'ceo',
-        title: 'HR',
-        name: 'People Person',
-        instructions: 'Reveal your squad loyalty to a player of your choice. Play immediately after drawing.',
+        title: 'CEO',
+        name: 'The Real Boss!',
+        instructions: 'Take another player\'s management card or draw two cards from the management deck, keeping one. Play at any time.',
         playablePhases: ['mission', 'teamProposal', 'teamVoting'],
         playableStories: [1, 2, 3, 4, 5],
-        imageUrl: 'assets/management/hr.png'
+        imageUrl: 'assets/management/ceo.png'
     },
     'cmo': {
         id: 'cmo',

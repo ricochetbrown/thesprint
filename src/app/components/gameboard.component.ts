@@ -42,7 +42,7 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                     }
                                     <!-- Team member overlay (for both proposed and approved teams) -->
                                     @if (game.mission?.team!.includes(playerId) || game.teamVote?.proposedTeam!.includes(playerId)) {
-                                        <img src="assets/supercoder.png" alt="Team" class="absolute top-0 left-[-5px] w-8 h-[2rem] md:w-10 md:h-10">
+                                        <img src="assets/supercoder.png" alt="Team" class="absolute top-0 left-[-5px] w-8 h-[2rem] md:w-10">
                                     }
                                     <!-- Management designated player overlay -->
                                     @if (playerId === game.managementDesignatedPlayer) {
@@ -335,6 +335,53 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                     }
                                 </div>
                             }
+                            @case ('ceoCardPlay') {
+                                <div>
+                                    @if (authService.userId() === game.ceoCardPlayerId) {
+                                        <h3 class="text-xl font-bold mb-4">CEO Card: The Real Boss!</h3>
+
+                                        <!-- If there are players with management cards -->
+                                        @if (playersWithManagementCards(game).length > 0) {
+                                            <p class="mb-4">Select a player to take their management card:</p>
+                                            <div class="flex flex-wrap gap-2 mb-4">
+                                                @for (playerId of playersWithManagementCards(game); track playerId) {
+                                                    <button class="px-3 py-1 rounded bg-purple-500 hover:bg-purple-600 text-white"
+                                                            (click)="takeManagementCard(playerId, game)">
+                                                        {{ game.players[playerId]?.name }} ({{ MANAGEMENT_CARDS[game.players[playerId].managementCard!]?.title }})
+                                                    </button>
+                                                }
+                                            </div>
+                                        }
+                                        <!-- If no players have management cards, show drawn cards -->
+                                        @else if (game.ceoCardDrawnCards && game.ceoCardDrawnCards.length > 0) {
+                                            <p class="mb-4">No other players have management cards. Select one of these cards to keep:</p>
+                                            <div class="flex flex-wrap gap-4 mb-4">
+                                                @for (cardId of game.ceoCardDrawnCards; track cardId) {
+                                                    <div class="flex flex-col items-center">
+                                                        <img [src]="'assets/management/' + cardId + '.png'"
+                                                             alt="Management Card" class="w-24 h-36 mb-2">
+                                                        <p class="text-sm font-semibold">{{ MANAGEMENT_CARDS[cardId]?.title }} - {{ MANAGEMENT_CARDS[cardId]?.name }}</p>
+                                                        <button class="mt-2 px-3 py-1 rounded bg-green-500 hover:bg-green-600 text-white"
+                                                                (click)="selectCEOCard(cardId, game)">
+                                                            Select
+                                                        </button>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                        <!-- If no cards have been drawn yet -->
+                                        @else {
+                                            <p class="mb-4">No other players have management cards. Drawing two cards for you to choose from...</p>
+                                            <button (click)="drawCEOCards(game)"
+                                                    class="bg-purple-500 hover:bg-purple-600 px-4 py-2 rounded">
+                                                Draw Cards
+                                            </button>
+                                        }
+                                    } @else {
+                                        <p class="mb-4">Waiting for {{ game.players[game.ceoCardPlayerId!]?.name }} to use their CEO card...</p>
+                                    }
+                                </div>
+                            }
                             @default {
                                 <p>Waiting for game to progress...</p>
                             }
@@ -348,7 +395,7 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                             <div class="flex flex-col md:flex-row gap-4">
                                 <div class="flex-shrink-0">
                                     <img [src]="getPlayedManagementCard(game)?.imageUrl"
-                                         alt="Management Card" class="w-16 h-24">
+                                         alt="Management Card" class="w-[12rem] h-[8rem]">
                                 </div>
                                 <div class="flex-grow">
                                     <h4 class="text-lg font-semibold">{{ getPlayedManagementCard(game)?.title }} - {{ getPlayedManagementCard(game)?.name }}</h4>
@@ -613,6 +660,7 @@ export class GameBoardComponent {
             case 'results': return 'Results';
             case 'gameOver': return 'Game Over';
             case 'shiftingPriorities': return 'Shifting Priorities - Team Selection';
+            case 'ceoCardPlay': return 'CEO Card: The Real Boss!';
             default: return status.charAt(0).toUpperCase() + status.slice(1);
         }
     }
@@ -934,5 +982,39 @@ export class GameBoardComponent {
         } else {
             return 'sinister';
         }
+    }
+
+    // Get all players who have management cards (excluding the current player)
+    playersWithManagementCards(game: Game): string[] {
+        const myId = this.authService.userId();
+        if (!myId) return [];
+
+        return Object.keys(game.players).filter(playerId => {
+            return playerId !== myId &&
+                   game.players[playerId].managementCard !== null &&
+                   game.players[playerId].managementCard !== undefined;
+        });
+    }
+
+    // Take a management card from another player
+    takeManagementCard(playerId: string, game: Game) {
+        const myId = this.authService.userId();
+        if (!myId || !game.players[playerId].managementCard) return;
+
+        // Get the card from the other player
+        const cardId = game.players[playerId].managementCard;
+
+        // Call the game service to handle the card transfer
+        this.gameService.takeCEOManagementCard(playerId, cardId);
+    }
+
+    // Draw two cards from the management deck
+    drawCEOCards(game: Game) {
+        this.gameService.drawCEOCards();
+    }
+
+    // Select one of the drawn cards to keep
+    selectCEOCard(cardId: string, game: Game) {
+        this.gameService.selectCEOCard(cardId);
     }
 }

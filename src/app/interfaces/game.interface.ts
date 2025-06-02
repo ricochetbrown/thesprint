@@ -7,7 +7,7 @@ export interface Game {
     name?: string;
     hostId: string;
     hostName?: string;
-    status: 'lobby' | 'starting' | 'teamProposal' | 'teamVoting' | 'mission' | 'results' | 'assassination' | 'gameOver' | 'shiftingPriorities' | 'loyaltyReveal';
+    status: 'lobby' | 'starting' | 'teamProposal' | 'teamVoting' | 'mission' | 'results' | 'assassination' | 'gameOver' | 'shiftingPriorities' | 'loyaltyReveal' | 'ceoCardPlay';
     players: { [playerId: string]: Player }; // Player objects keyed by player ID
     playerOrder: string[]; // Array of player IDs to maintain order
     settings: {
@@ -85,4 +85,9 @@ export interface Game {
         }
     }; // Tracks which players have revealed their loyalty to which other players
     loyaltyRevealPlayerId?: string; // Player ID who is currently revealing their loyalty
+
+    // CEO card properties
+    ceoCardPlayerId?: string; // Player ID who played the CEO card
+    ceoCardDrawnCards?: string[]; // Cards drawn when playing CEO card (when no other player has a management card)
+    ceoCardSelectedCard?: string; // Card selected from the drawn cards
 }

@@ -90,4 +90,5 @@ export interface Game {
     ceoCardPlayerId?: string; // Player ID who played the CEO card
     ceoCardDrawnCards?: string[]; // Cards drawn when playing CEO card (when no other player has a management card)
     ceoCardSelectedCard?: string; // Card selected from the drawn cards
+    previousStatus?: 'lobby' | 'starting' | 'teamProposal' | 'teamVoting' | 'mission' | 'results' | 'assassination' | 'gameOver' | 'shiftingPriorities' | 'loyaltyReveal' | 'ceoCardPlay'; // Previous game status before special phase
 }

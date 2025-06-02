@@ -2,7 +2,7 @@ import { effect, inject, Injectable } from '@angular/core';
 
 // Firebase Imports (ensure you have firebase installed: npm install firebase)
 import { getAuth } from 'firebase/auth';
-import { getFirestore, Firestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, addDoc, getDocs, serverTimestamp, Unsubscribe } from 'firebase/firestore';
+import { getFirestore, Firestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, addDoc, getDocs, serverTimestamp, Unsubscribe, deleteDoc, writeBatch } from 'firebase/firestore';
 import { AuthService } from './auth.service';
 
 // --- Configuration (Expected to be provided globally) ---
@@ -78,7 +78,7 @@ export class FirestoreService {
         const docRef = doc(this.db, path, docId);
         await updateDoc(docRef, { ...data, updatedAt: serverTimestamp() });
     }
-    
+
     listenToDocument<T>(collectionName: string, docId: string, callback: (data: T | null) => void, isPublic: boolean = false): Unsubscribe | null {
         if (!this.db) {
             console.error("Firestore not initialized for listening.");
@@ -108,5 +108,40 @@ export class FirestoreService {
         const q = query(collRef, ...queryConstraints);
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as T));
+    }
+
+    async deleteAllDocumentsInCollection(collectionName: string, isPublic: boolean = false): Promise<void> {
+        if (!this.db) throw new Error("Firestore not initialized");
+        const path = isPublic ? this.getPublicCollectionPath(collectionName) : this.getUserCollectionPath(collectionName);
+        if (!path) throw new Error("Could not determine collection path.");
+
+        const collRef = collection(this.db, path);
+        const querySnapshot = await getDocs(query(collRef));
+
+        // Use batched writes for better performance and atomicity
+        const batchSize = 500; // Firestore batch limit is 500
+        const batches = [];
+        let batch = writeBatch(this.db);
+        let operationCount = 0;
+
+        for (const docSnapshot of querySnapshot.docs) {
+            batch.delete(doc(this.db, path, docSnapshot.id));
+            operationCount++;
+
+            // If we reach the batch limit, commit the batch and start a new one
+            if (operationCount >= batchSize) {
+                batches.push(batch.commit());
+                batch = writeBatch(this.db);
+                operationCount = 0;
+            }
+        }
+
+        // Commit any remaining operations
+        if (operationCount > 0) {
+            batches.push(batch.commit());
+        }
+
+        // Wait for all batches to complete
+        await Promise.all(batches);
     }
 }

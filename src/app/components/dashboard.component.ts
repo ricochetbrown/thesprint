@@ -21,6 +21,16 @@ import { Game } from "../interfaces/game.interface";
 
             <div class="text-center mb-12">
                 <h1 class="text-5xl font-bold tracking-tight">Game Dashboard</h1>
+
+                @if (isAdmin()) {
+                    <div class="mt-4">
+                        <button (click)="deleteAllGames()"
+                                class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
+                                [disabled]="isDeletingGames()">
+                            {{ isDeletingGames() ? 'Deleting All Games...' : 'Delete All Games' }}
+                        </button>
+                    </div>
+                }
             </div>
 
             <div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mb-12">
@@ -137,12 +147,42 @@ export class DashboardComponent implements OnInit {
     actionError = signal<string | null>(null);
     publicGames = signal<Game[]>([]);
     isLoading = signal<boolean>(false);
+    isDeletingGames = signal<boolean>(false);
 
     // Signal to store player counts for each game
     playerCounts = signal<Record<string, number>>({});
 
+    // Check if the current user is the admin (ricochetbrown@gmail.com)
+    isAdmin = signal<boolean>(false);
+
     ngOnInit() {
         this.fetchPublicGames();
+
+        // Check if the current user is the admin
+        effect(() => {
+            const currentUser = this.authService.currentUser();
+            this.isAdmin.set(currentUser?.email === 'ricochetbrown@gmail.com');
+        });
+    }
+
+    async deleteAllGames() {
+        if (!confirm('Are you sure you want to delete ALL games? This action cannot be undone.')) {
+            return;
+        }
+
+        this.isDeletingGames.set(true);
+        this.actionError.set(null);
+
+        try {
+            await this.gameService.deleteAllGames();
+            alert('All games have been deleted successfully.');
+            this.fetchPublicGames(); // Refresh the list
+        } catch (error: any) {
+            this.actionError.set(error.message || 'Failed to delete games.');
+            console.error('Delete games error:', error);
+        } finally {
+            this.isDeletingGames.set(false);
+        }
     }
 
     // Function to get player count for a game

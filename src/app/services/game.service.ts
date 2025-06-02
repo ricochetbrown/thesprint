@@ -2094,4 +2094,15 @@ export class GameService {
             return [];
         }
     }
+
+    async deleteAllGames(): Promise<boolean> {
+        try {
+            await this.firestoreService.deleteAllDocumentsInCollection('games', true);
+            console.log("All games deleted successfully");
+            return true;
+        } catch (error) {
+            console.error("Error deleting all games:", error);
+            throw error;
+        }
+    }
 }

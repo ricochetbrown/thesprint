@@ -41,7 +41,7 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                         <img src="assets/technicalowner.png" alt="TO" class="absolute" style="width: 5rem; height: 5rem; top: -30px; right: -20px;">
                                     }
                                     <!-- Team member overlay (for both proposed and approved teams) -->
-                                    @if (game.mission?.team?.includes(playerId) || game.teamVote?.proposedTeam?.includes(playerId)) {
+                                    @if (game.mission?.team!.includes(playerId) || game.teamVote?.proposedTeam!.includes(playerId)) {
                                         <img src="assets/supercoder.png" alt="Team" class="absolute top-0 left-[-5px] w-8 h-[2rem] md:w-10 md:h-10">
                                     }
                                     <!-- Management designated player overlay -->

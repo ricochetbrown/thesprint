@@ -10,6 +10,15 @@ export interface ManagementCard {
 
 // Define the management cards
 export const MANAGEMENT_CARDS: { [key: string]: ManagementCard } = {
+    'tl': {
+        id: 'tl',
+        title: 'Team Lead',
+        name: 'Preliminary Review',
+        instructions: 'Before any reviews are made, designate a player to review the User Story publicly for all to see. Play after a team is agreed upon during grooming for the 1st, 2nd, 3rd, or 4th User Story. May be played upon drawing before the team enters the Review Phase.',
+        playablePhases: ['mission'],
+        playableStories: [1, 2, 3, 4],
+        imageUrl: 'assets/management/tl.png'
+    },
     'po': {
         id: 'po',
         title: 'PO',

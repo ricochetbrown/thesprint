@@ -289,11 +289,12 @@ export class GameService {
     }
 
     private initializeManagementDeck(): string[] {
-        // Create the management deck with only 4 cards
-        // 2 PO - Shifting Priorities and 2 HR - People Person cards
+        // Create the management deck with 6 cards
+        // 2 PO - Shifting Priorities, 2 HR - People Person cards, and 2 TL - Preliminary Review cards
         const managementDeck = [
             'po', 'po', // 2 PO cards (Shifting Priorities)
-            'hr', 'hr'  // 2 HR cards (People Person)
+            'hr', 'hr', // 2 HR cards (People Person)
+            'tl', 'tl'  // 2 TL cards (Preliminary Review)
         ];
 
         // Shuffle the deck
@@ -479,12 +480,6 @@ export class GameService {
         if (missingOriginalPlayers.length > 0) {
             const missingPlayerNames = missingOriginalPlayers.map(id => game.players[id]?.name || 'Unknown').join(', ');
             throw new Error(`The selected team must include all players from the original team. Missing: ${missingPlayerNames}`);
-        }
-
-        // 4. Check that only one new player has been added
-        const newPlayers = teamPlayerIds.filter(playerId => !originalTeam.includes(playerId));
-        if (newPlayers.length !== 1) {
-            throw new Error(`You must add exactly one new player to the team. Found ${newPlayers.length} new players.`);
         }
 
         // Update the game state to transition to the mission phase
@@ -688,26 +683,33 @@ export class GameService {
         const originalTeam = game.teamProposal?.selectedPlayers || [];
         console.log("aiSubmitShiftingPrioritiesTeam: Original team", { originalTeam });
 
-        // We need to add exactly one player to the original team
+        // Calculate how many players we need to add
+        const playersToAdd = requiredTeamSize - originalTeam.length;
+
+        if (playersToAdd <= 0) {
+            console.log("aiSubmitShiftingPrioritiesTeam: No need to add players, team already at required size");
+            return; // No need to add players
+        }
+
         // Find players who are not already on the team
         const allPlayerIds = Object.keys(game.players);
         const eligiblePlayers = allPlayerIds.filter(playerId => !originalTeam.includes(playerId));
 
-        if (eligiblePlayers.length === 0) {
-            console.log("aiSubmitShiftingPrioritiesTeam: No eligible players to add to the team");
-            return; // No eligible players
+        if (eligiblePlayers.length < playersToAdd) {
+            console.log("aiSubmitShiftingPrioritiesTeam: Not enough eligible players to add to the team");
+            return; // Not enough eligible players
         }
 
-        // Randomly select one player from the eligible players
-        const randomIndex = Math.floor(Math.random() * eligiblePlayers.length);
-        const selectedPlayerId = eligiblePlayers[randomIndex];
+        // Randomly select the required number of players from the eligible players
+        const shuffledEligiblePlayers = [...eligiblePlayers].sort(() => 0.5 - Math.random());
+        const selectedNewPlayers = shuffledEligiblePlayers.slice(0, playersToAdd);
 
-        // Create the new team by adding the selected player to the original team
-        const selectedTeamIds = [...originalTeam, selectedPlayerId];
+        // Create the new team by adding the selected players to the original team
+        const selectedTeamIds = [...originalTeam, ...selectedNewPlayers];
         console.log("aiSubmitShiftingPrioritiesTeam: Selected team", {
             requiredTeamSize,
             originalTeam,
-            selectedPlayerId,
+            selectedNewPlayers,
             selectedTeamIds
         });
 
@@ -740,17 +742,11 @@ export class GameService {
             [currentUserId]: vote
         };
 
-        const gameLogEntry = {
-            timestamp: new Date(),
-            message: `${game.players[currentUserId]?.name || 'Player'} voted to ${vote} the team.`
-        };
-
         await this.firestoreService.updateDocument('games', gameId, {
             teamVote: {
                 ...game.teamVote,
                 votes: updatedVotes
-            },
-            gameLog: [...(game.gameLog || []), gameLogEntry]
+            }
         }, true);
 
         // 4. After recording the vote, check if all players have voted.
@@ -1481,7 +1477,7 @@ export class GameService {
             const squadLoyalty = isDexter ? 'dexter' : 'sinister';
 
             // Add log entry for loyalty reveal
-            gameLogEntry.message += ` ${player.name} revealed their ${squadLoyalty} squad loyalty to ${game.players[targetPlayerId].name}.`;
+            gameLogEntry.message += ` ${player.name} revealed their loyalty to ${game.players[targetPlayerId].name}.`;
 
             // Update the game state to record the loyalty reveal
             const revealedLoyalties = game.revealedLoyalties || {};
@@ -1492,6 +1488,39 @@ export class GameService {
 
             additionalUpdates = {
                 revealedLoyalties: revealedLoyalties
+            };
+        } else if (cardInfo.name === 'Preliminary Review') {
+            // "Preliminary Review" card effect:
+            // Designate a player to review the User Story publicly for all to see
+
+            // For now, we'll randomly select another player to review the User Story
+            // In a real implementation, the player would choose who to designate
+            const playerIds = Object.keys(game.players).filter(id => id !== currentUserId);
+
+            if (playerIds.length === 0) {
+                throw new Error("No other players to designate for review.");
+            }
+
+            const randomIndex = Math.floor(Math.random() * playerIds.length);
+            const designatedPlayerId = playerIds[randomIndex];
+            const designatedPlayer = game.players[designatedPlayerId];
+
+            // Randomly determine if the designated player will merge or request changes
+            // In a real implementation, this would be based on the player's decision
+            const willMerge = Math.random() > 0.5;
+            const reviewAction = willMerge ? 'merged' : 'requested changes on';
+
+            // Add log entry for the preliminary review
+            gameLogEntry.message += ` ${player.name} designated ${designatedPlayer.name} to review the User Story. ${designatedPlayer.name} ${reviewAction} the mission.`;
+
+            // Update the game state to record the preliminary review
+            additionalUpdates = {
+                preliminaryReview: {
+                    designatedPlayerId: designatedPlayerId,
+                    designatedBy: currentUserId,
+                    action: willMerge ? 'merge' : 'requestChanges',
+                    timestamp: Timestamp.now()
+                }
             };
         }
 
@@ -1615,7 +1644,6 @@ export class GameService {
 
         // Collect cards for all AI players
         const cards: {[playerId: string]: 'approve' | 'request'} = {};
-        const gameLogEntries: {timestamp: Date, message: string}[] = [];
 
         for (const aiPlayerId of aiPlayerIds) {
             // Skip if player is not an AI, not on mission, or has already played
@@ -1645,12 +1673,6 @@ export class GameService {
 
             // Add card to the collection
             cards[aiPlayerId] = card;
-
-            // Add log entry
-            gameLogEntries.push({
-                timestamp: new Date(),
-                message: `${game.players[aiPlayerId]?.name || 'AI Player'} played a card.`
-            });
         }
 
         // If no cards were collected, return
@@ -1670,8 +1692,7 @@ export class GameService {
             // Update Firebase with all cards in a single update
             console.log("submitAllAIMissionCards: Updating database with cards");
             await this.firestoreService.updateDocument('games', gameId, {
-                'mission.cardsPlayed': updatedCardsPlayed,
-                gameLog: [...(game.gameLog || []), ...gameLogEntries]
+                'mission.cardsPlayed': updatedCardsPlayed
             }, true);
 
             console.log("submitAllAIMissionCards: Database updated successfully");
@@ -1748,16 +1769,10 @@ export class GameService {
         const updatedCardsPlayed = { ...game.mission?.cardsPlayed, [currentUserId]: card };
         console.log("submitMissionCard: Updated cards played", updatedCardsPlayed);
 
-        const gameLogEntry = {
-            timestamp: new Date(),
-            message: `${game.players[currentUserId]?.name || 'Player'} played a card.`
-        };
-
         console.log("submitMissionCard: Updating database with card");
         try {
             await this.firestoreService.updateDocument('games', gameId, {
-                'mission.cardsPlayed': updatedCardsPlayed,
-                gameLog: [...(game.gameLog || []), gameLogEntry]
+                'mission.cardsPlayed': updatedCardsPlayed
             }, true);
             console.log("submitMissionCard: Database updated successfully");
         } catch (error) {

@@ -369,7 +369,6 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                 @if (game.gameLog && game.gameLog.length > 0) {
                                     @for (logEntry of getRecentGameLogs(game); track $index) {
                                         <div class="mb-1 pb-1 border-b border-slate-700">
-                                            <span class="text-gray-400">{{ formatTimestamp(logEntry.timestamp) }}:</span>
                                             <span>{{ logEntry.message }}</span>
                                         </div>
                                     }

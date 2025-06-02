@@ -26,15 +26,21 @@ export interface Game {
     managementPhase?: boolean; // Whether we're in the management phase (between Grooming and Review)
     managementCardPlayPhase?: boolean; // Whether a player has drawn a management card and now has the opportunity to play it
     playedManagementCard?: {
-        cardId: string;       // ID of the played card (e.g., 'po', 'ceo')
+        cardId: string;       // ID of the played card (e.g., 'po', 'ceo', 'tl')
         playedBy: string;     // Player ID who played the card
         playedAt: Timestamp;  // When the card was played
     };
     discardedManagementCards?: {
-        cardId: string;       // ID of the discarded card (e.g., 'po', 'ceo')
+        cardId: string;       // ID of the discarded card (e.g., 'po', 'ceo', 'tl')
         playedBy: string;     // Player ID who played/discarded the card
         discardedAt: Timestamp; // When the card was discarded
     }[];
+    preliminaryReview?: {
+        designatedPlayerId: string; // Player ID designated to review the User Story
+        designatedBy: string;       // Player ID who designated the reviewer
+        action: 'merge' | 'requestChanges'; // Action taken by the designated player
+        timestamp: Timestamp;       // When the review was conducted
+    };
     originalStoryNum?: number; // Original story number when PO card was played
     poShiftedStories?: number[]; // Stories that have been completed due to PO card effect
     createdAt: Timestamp;

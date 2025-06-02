@@ -1923,8 +1923,41 @@ export class GameService {
         let nextStoryNum: number;
         let additionalLogMessage = '';
 
-        // If we have an original story number, we're in a shifted story due to PO card
-        if (game.originalStoryNum !== undefined) {
+        // First, check if there are any lower-numbered stories that haven't been completed yet
+        const storyResults = game.storyResults || [];
+        let lowestIncompleteStory = -1;
+
+        for (let i = 0; i < storyResults.length; i++) {
+            if (storyResults[i] === null) {
+                lowestIncompleteStory = i + 1; // Convert from 0-indexed to 1-indexed
+                break;
+            }
+        }
+
+        if (lowestIncompleteStory > 0) {
+            // We found a lower-numbered story that hasn't been completed yet
+            console.log("nextRound: Found lower-numbered incomplete story", lowestIncompleteStory);
+            nextStoryNum = lowestIncompleteStory;
+            additionalLogMessage = ` Returning to User Story #${nextStoryNum} which hasn't been completed yet.`;
+
+            // If we're in a shifted story, update the game state
+            if (game.originalStoryNum !== undefined) {
+                // Add the current story to the list of shifted stories that have been completed
+                const poShiftedStories = [...(game.poShiftedStories || []), game.currentStoryNum];
+
+                // Update the game with the completed shifted story
+                await this.firestoreService.updateDocument(
+                    'games',
+                    gameId,
+                    {
+                        poShiftedStories: poShiftedStories,
+                        originalStoryNum: null // Clear the original story number
+                    },
+                    true
+                );
+            }
+        } else if (game.originalStoryNum !== undefined) {
+            // We're in a shifted story due to PO card, but there are no lower-numbered incomplete stories
             console.log("nextRound: Completing shifted story, proceeding to next story after original story", game.originalStoryNum);
 
             // Add the current story to the list of shifted stories that have been completed

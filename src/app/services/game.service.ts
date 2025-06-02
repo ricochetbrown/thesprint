@@ -53,6 +53,12 @@ export class GameService {
                             this.aiProposeTeam();
                         }
 
+                        // Check if the current TO is an AI and the game is in the shiftingPriorities phase
+                        if (game && currentTOId && isCurrentTOAnAI && game.status === 'shiftingPriorities') {
+                            console.log("AI will select a team for Shifting Priorities");
+                            this.aiSubmitShiftingPrioritiesTeam();
+                        }
+
                         // Check if any AI players need to play mission cards
                         if (game && gameId && game.status === 'mission' && game.mission?.team) {
                             // Find all AI players on the mission team who haven't played a card yet
@@ -447,12 +453,12 @@ export class GameService {
         return assignedRoles;
     }
 
-    async submitShiftingPrioritiesTeam(teamPlayerIds: string[]): Promise<void> {
+    async submitShiftingPrioritiesTeam(teamPlayerIds: string[], overrideUserId?: string): Promise<void> {
         const gameId = this.activeGameId();
         const game = this.currentGame();
-        const currentUserId = this.authService.userId();
+        const currentUserId = overrideUserId || this.authService.userId();
 
-        console.log("submitShiftingPrioritiesTeam called with", { teamPlayerIds, currentUserId });
+        console.log("submitShiftingPrioritiesTeam called with", { teamPlayerIds, currentUserId, overrideUserId });
 
         if (!gameId || !game || !currentUserId) {
             throw new Error("Game or user not available.");
@@ -636,6 +642,49 @@ export class GameService {
             console.log("aiProposeTeam: Team proposed successfully");
         } catch (error) {
             console.error("aiProposeTeam: Error proposing team", error);
+        }
+    }
+
+    async aiSubmitShiftingPrioritiesTeam(): Promise<void> {
+        console.log("aiSubmitShiftingPrioritiesTeam called");
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+
+        if (!gameId || !game) {
+            console.log("aiSubmitShiftingPrioritiesTeam: No active game");
+            return; // No active game
+        }
+
+        const currentUserId = game.currentTO_id;
+        const currentPlayer = game.players[currentUserId!];
+        console.log("aiSubmitShiftingPrioritiesTeam: Current TO", { currentUserId, currentPlayer });
+
+        // Check if the current player is an AI and is the current TO
+        const isAI = currentUserId!.startsWith(gameId + '-AI-');
+        if (!isAI || game.currentTO_id !== currentUserId) {
+            console.log("aiSubmitShiftingPrioritiesTeam: Not an AI TO", { isAI, currentTO_id: game.currentTO_id, currentUserId });
+            return; // Not an AI TO
+        }
+
+        // Get the required team size from the game.teamProposal.numToSelect
+        const requiredTeamSize = game.teamProposal?.numToSelect || 0;
+        if (requiredTeamSize === 0) {
+            console.log("aiSubmitShiftingPrioritiesTeam: Invalid team size requirement");
+            return; // Invalid team size requirement
+        }
+
+        // Randomly select the correct number of players
+        const allPlayers = Object.values(game.players);
+        const shuffledPlayers = allPlayers.sort(() => 0.5 - Math.random()); // Shuffle players
+        const selectedTeamIds = shuffledPlayers.slice(0, requiredTeamSize).map(p => p.id); // Select the first 'requiredTeamSize' players
+        console.log("aiSubmitShiftingPrioritiesTeam: Selected team", { requiredTeamSize, selectedTeamIds });
+
+        try {
+            // Call the submitShiftingPrioritiesTeam() method with the randomly selected team IDs and the AI's user ID
+            await this.submitShiftingPrioritiesTeam(selectedTeamIds, currentUserId);
+            console.log("aiSubmitShiftingPrioritiesTeam: Team submitted successfully");
+        } catch (error) {
+            console.error("aiSubmitShiftingPrioritiesTeam: Error submitting team", error);
         }
     }
 

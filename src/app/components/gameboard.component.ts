@@ -602,7 +602,7 @@ export class GameBoardComponent {
 
     submitShiftingPrioritiesTeam(game: Game): void {
         console.log("Submit Shifting Priorities Team clicked");
-        this.gameService.submitShiftingPrioritiesTeam(this.selectedPlayers);
+        this.gameService.submitShiftingPrioritiesTeam(this.selectedPlayers, undefined);
     }
 
     toggleManagementDesignation(playerId: string): void {

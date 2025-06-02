@@ -161,6 +161,7 @@ export class DashboardComponent implements OnInit {
         // Check if the current user is the admin
         effect(() => {
             const currentUser = this.authService.currentUser();
+            console.log("Current user:", currentUser);
             this.isAdmin.set(currentUser?.email === 'ricochetbrown@gmail.com');
         });
     }

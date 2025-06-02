@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnInit } from "@angular/core";
+import { Component, inject, signal, OnInit, effect } from "@angular/core";
 import { AuthService } from "../services/auth.service";
 import { GameService } from "../services/game.service";
 import { FormsModule } from "@angular/forms";

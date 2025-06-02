@@ -421,7 +421,7 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                                  alt="Discarded Card" class="w-12 h-18 flex-shrink-0">
                                             <div>
                                                 <h4 class="font-semibold">{{ MANAGEMENT_CARDS[card.cardId]?.title }} - {{ MANAGEMENT_CARDS[card.cardId]?.name }}</h4>
-                                                <p class="text-xs text-gray-300">Played by {{ game.players[card.playedBy]?.name || 'Unknown' }}</p>
+                                                <p class="text-xs text-gray-300">Played by {{ game.players[card.playedBy].name || 'Unknown' }}</p>
                                             </div>
                                         </div>
                                     </div>

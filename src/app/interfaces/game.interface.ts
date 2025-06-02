@@ -67,4 +67,10 @@ export interface Game {
     };
     winner?: 'dexter' | 'sinister'; // Or 'creepers' with expansion
     roles?: { [playerId: string]: string }; // Assigned roles
+    revealedLoyalties?: {
+        [revealerId: string]: {
+            targetId: string; // Player who was shown the loyalty
+            timestamp: Timestamp;
+        }
+    }; // Tracks which players have revealed their loyalty to which other players
 }

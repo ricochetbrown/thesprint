@@ -54,6 +54,11 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                     @if (isPlayerDukeForSupportManager(playerId, game)) {
                                         <span class="text-xs text-indigo-300 font-bold">(Duke)</span>
                                     }
+                                    @if (hasLoyaltyBeenRevealed(playerId, game)) {
+                                        <span class="text-xs font-bold" [ngClass]="{'text-blue-300': getPlayerSquadLoyalty(playerId, game) === 'dexter', 'text-red-300': getPlayerSquadLoyalty(playerId, game) === 'sinister'}">
+                                            ({{ getPlayerSquadLoyalty(playerId, game) === 'dexter' ? 'Dexter' : 'Sinister' }})
+                                        </span>
+                                    }
                                     @if (game.status === 'teamVoting' && game.teamVote?.votes) {
                                         <span class="text-xs" [ngClass]="{'text-yellow-300': game.teamVote?.votes?.[playerId] === undefined, 'text-green-300': game.teamVote?.votes?.[playerId] === 'agree', 'text-red-300': game.teamVote?.votes?.[playerId] === 'rethrow'}">
                                             {{ game.teamVote?.votes?.[playerId] ? (game.teamVote?.votes?.[playerId] === 'agree' ? 'Agreed' : 'Rethrow') : 'Not Voted' }}
@@ -641,6 +646,16 @@ export class GameBoardComponent {
             }
         }
 
+        // Check if this player has revealed their loyalty to the current player via HR card
+        if (this.hasLoyaltyBeenRevealed(playerId, game)) {
+            const squadLoyalty = this.getPlayerSquadLoyalty(playerId, game);
+            if (squadLoyalty === 'dexter') {
+                return "assets/dexter.png";
+            } else if (squadLoyalty === 'sinister') {
+                return "assets/sinister.png";
+            }
+        }
+
         // For other players' avatars
         if (game.roles && myId && game.roles[myId]) {
             const myRole = game.roles[myId];
@@ -707,5 +722,33 @@ export class GameBoardComponent {
             playedBy: game.players[game.playedManagementCard.playedBy]?.name || 'Unknown',
             playedAt: game.playedManagementCard.playedAt
         };
+    }
+
+    // Check if a player's loyalty has been revealed to the current player
+    hasLoyaltyBeenRevealed(revealerId: string, game: Game): boolean {
+        const myId = this.authService.userId();
+
+        if (!myId || !game.revealedLoyalties) {
+            return false;
+        }
+
+        // Check if the revealer has revealed their loyalty to the current player
+        return game.revealedLoyalties[revealerId]?.targetId === myId;
+    }
+
+    // Get the squad loyalty of a player (dexter or sinister)
+    getPlayerSquadLoyalty(playerId: string, game: Game): 'dexter' | 'sinister' | null {
+        if (!game.roles || !game.roles[playerId]) {
+            return null;
+        }
+
+        const playerRole = game.roles[playerId];
+
+        // Determine if the player is Dexter or Sinister
+        if (playerRole.includes('Dexter') || playerRole === 'Duke' || playerRole === 'SupportManager') {
+            return 'dexter';
+        } else {
+            return 'sinister';
+        }
     }
 }

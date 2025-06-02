@@ -21,21 +21,21 @@ export const MANAGEMENT_CARDS: { [key: string]: ManagementCard } = {
     },
     'ceo': {
         id: 'ceo',
-        title: 'PO',
-        name: 'Shifting Priorities',
-        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
-        playablePhases: ['mission'],
-        playableStories: [1, 2, 3],
-        imageUrl: 'assets/management/po.png'
+        title: 'HR',
+        name: 'People Person',
+        instructions: 'Reveal your squad loyalty to a player of your choice. Play immediately after drawing.',
+        playablePhases: ['mission', 'teamProposal', 'teamVoting'],
+        playableStories: [1, 2, 3, 4, 5],
+        imageUrl: 'assets/management/hr.png'
     },
     'cmo': {
         id: 'cmo',
-        title: 'PO',
-        name: 'Shifting Priorities',
-        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
-        playablePhases: ['mission'],
-        playableStories: [1, 2, 3],
-        imageUrl: 'assets/management/po.png'
+        title: 'HR',
+        name: 'People Person',
+        instructions: 'Reveal your squad loyalty to a player of your choice. Play immediately after drawing.',
+        playablePhases: ['mission', 'teamProposal', 'teamVoting'],
+        playableStories: [1, 2, 3, 4, 5],
+        imageUrl: 'assets/management/hr.png'
     },
     'coo': {
         id: 'coo',
@@ -66,12 +66,12 @@ export const MANAGEMENT_CARDS: { [key: string]: ManagementCard } = {
     },
     'hr': {
         id: 'hr',
-        title: 'PO',
-        name: 'Shifting Priorities',
-        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
-        playablePhases: ['mission'],
-        playableStories: [1, 2, 3],
-        imageUrl: 'assets/management/po.png'
+        title: 'HR',
+        name: 'People Person',
+        instructions: 'Reveal your squad loyalty to a player of your choice. Play immediately after drawing.',
+        playablePhases: ['mission', 'teamProposal', 'teamVoting'],
+        playableStories: [1, 2, 3, 4, 5],
+        imageUrl: 'assets/management/hr.png'
     },
     'janitor': {
         id: 'janitor',

@@ -1,7 +1,7 @@
 import { signal, WritableSignal, effect, inject, Injectable } from '@angular/core';
 import { FirestoreService } from './firestore.service';
 import { AuthService } from './auth.service';
-import { serverTimestamp, Unsubscribe, where } from 'firebase/firestore';
+import { serverTimestamp, Unsubscribe, Timestamp, where } from 'firebase/firestore';
 import { MANAGEMENT_CARDS } from '../interfaces/management-card.interface';
 import { Game } from '../interfaces/game.interface';
 import { Player } from '../interfaces/player.interface';
@@ -1205,8 +1205,16 @@ export class GameService {
 
         if (cardInfo.name === 'Shifting Priorities') {
             // "Shifting Priorities" card effect:
-            // Switch to the next User Story
-            const nextStory = currentStory + 1;
+            // Switch to the next User Story that hasn't been played yet
+            let nextStory = currentStory + 1;
+            const poShiftedStories = game.poShiftedStories || [];
+
+            // Skip any stories that have already been played
+            while (poShiftedStories.includes(nextStory) && nextStory <= 5) {
+                console.log("playManagementCard: Skipping already played story", nextStory);
+                nextStory++;
+            }
+
             if (nextStory > 5) {
                 throw new Error("Cannot advance beyond the 5th User Story.");
             }
@@ -1214,28 +1222,86 @@ export class GameService {
             // Add log entry for story change
             gameLogEntry.message += ` Switching to User Story ${nextStory}.`;
 
-            // Store the original story number and initialize poShiftedStories if not already set
-            const poShiftedStories = game.poShiftedStories || [];
-
-            // Automatically form a team based on the next story's requirements
+            // Get the required team size for the next story
             const playerIds = Object.keys(game.players);
             const requiredTeamSize = this.getRequiredTeamSize(playerIds.length, nextStory);
 
-            // Select the team - for simplicity, we'll use the first N players where N is the required team size
+            // Get the current mission team if available
+            const currentMissionTeam = game.mission?.team || [];
+
+            // For simplicity, we'll automatically form a team based on the required size
             // In a real implementation, the TO might want to select specific players
-            const missionTeam = playerIds.slice(0, requiredTeamSize);
+            let missionTeam = [...currentMissionTeam];
 
-            // Add log entry for automatic team formation
-            gameLogEntry.message += ` The Technical Owner automatically formed a team of ${requiredTeamSize} players for the new story.`;
+            // Adjust the team size to match the requirements
+            if (missionTeam.length < requiredTeamSize) {
+                // Add players to the team
+                const availablePlayers = playerIds.filter(id => !missionTeam.includes(id));
+                while (missionTeam.length < requiredTeamSize && availablePlayers.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * availablePlayers.length);
+                    missionTeam.push(availablePlayers[randomIndex]);
+                    availablePlayers.splice(randomIndex, 1);
+                }
+            } else if (missionTeam.length > requiredTeamSize) {
+                // Remove players from the team
+                while (missionTeam.length > requiredTeamSize) {
+                    const randomIndex = Math.floor(Math.random() * missionTeam.length);
+                    missionTeam.splice(randomIndex, 1);
+                }
+            }
 
-            // Update the game state to move to the next story and skip straight to mission phase
+            gameLogEntry.message += ` The Technical Owner automatically adjusted the team to ${requiredTeamSize} players for the new story.`;
+
+            // Update the game state to move to the next story and go straight to mission phase
             additionalUpdates = {
                 currentStoryNum: nextStory,
                 originalStoryNum: currentStory, // Store the original story number
                 poShiftedStories: poShiftedStories, // Initialize or maintain the poShiftedStories array
-                status: 'mission', // Go straight to mission phase, skipping team proposal and voting
-                mission: { team: missionTeam, cardsPlayed: {} }, // Set up the mission team directly
+                status: 'mission', // Go straight to mission phase
+                mission: {
+                    team: missionTeam, // Use the adjusted mission team
+                    cardsPlayed: {}
+                },
                 teamVote: null // Clear any team votes
+            };
+        } else if (cardInfo.name === 'People Person') {
+            // "People Person" card effect:
+            // The player needs to select another player to reveal their squad loyalty to
+
+            // For now, we'll randomly select another player to reveal to
+            // In a real implementation, the player would choose who to reveal to
+            const playerIds = Object.keys(game.players).filter(id => id !== currentUserId);
+
+            if (playerIds.length === 0) {
+                throw new Error("No other players to reveal loyalty to.");
+            }
+
+            const randomIndex = Math.floor(Math.random() * playerIds.length);
+            const targetPlayerId = playerIds[randomIndex];
+
+            // Get the player's role to determine their squad loyalty
+            const playerRole = game.roles?.[currentUserId];
+
+            if (!playerRole) {
+                throw new Error("Player role not found.");
+            }
+
+            // Determine if the player is Dexter or Sinister
+            const isDexter = playerRole.includes('Dexter') || playerRole === 'Duke' || playerRole === 'SupportManager';
+            const squadLoyalty = isDexter ? 'dexter' : 'sinister';
+
+            // Add log entry for loyalty reveal
+            gameLogEntry.message += ` ${player.name} revealed their squad loyalty to ${game.players[targetPlayerId].name}.`;
+
+            // Update the game state to record the loyalty reveal
+            const revealedLoyalties = game.revealedLoyalties || {};
+            revealedLoyalties[currentUserId] = {
+                targetId: targetPlayerId,
+                timestamp: Timestamp.now()
+            };
+
+            additionalUpdates = {
+                revealedLoyalties: revealedLoyalties
             };
         }
 

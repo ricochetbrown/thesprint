@@ -289,15 +289,11 @@ export class GameService {
     }
 
     private initializeManagementDeck(): string[] {
-        // Create the management deck with 16 cards
-        // 13 unique cards + 1 extra hr + 1 extra mat + 1 extra po
+        // Create the management deck with only 4 cards
+        // 2 PO - Shifting Priorities and 2 HR - People Person cards
         const managementDeck = [
-            'ceo', 'cmo', 'coo', 'cso', 'cto',
-            'hr', 'hr', // 2 hr cards
-            'janitor', 'joe',
-            'mat', 'mat', // 2 mat cards
-            'po', 'po', // 2 po cards
-            'salesrep', 'sme', 'vpsales'
+            'po', 'po', // 2 PO cards (Shifting Priorities)
+            'hr', 'hr'  // 2 HR cards (People Person)
         ];
 
         // Shuffle the deck
@@ -474,6 +470,21 @@ export class GameService {
         const requiredTeamSize = game.teamProposal?.numToSelect || 0;
         if (teamPlayerIds.length !== requiredTeamSize) {
             throw new Error(`Incorrect team size. Story ${game.currentStoryNum} requires a team of ${requiredTeamSize} players.`);
+        }
+
+        // 3. Check if the original team is included in the selected team
+        const originalTeam = game.teamProposal?.selectedPlayers || [];
+        const missingOriginalPlayers = originalTeam.filter(playerId => !teamPlayerIds.includes(playerId));
+
+        if (missingOriginalPlayers.length > 0) {
+            const missingPlayerNames = missingOriginalPlayers.map(id => game.players[id]?.name || 'Unknown').join(', ');
+            throw new Error(`The selected team must include all players from the original team. Missing: ${missingPlayerNames}`);
+        }
+
+        // 4. Check that only one new player has been added
+        const newPlayers = teamPlayerIds.filter(playerId => !originalTeam.includes(playerId));
+        if (newPlayers.length !== 1) {
+            throw new Error(`You must add exactly one new player to the team. Found ${newPlayers.length} new players.`);
         }
 
         // Update the game state to transition to the mission phase
@@ -673,14 +684,35 @@ export class GameService {
             return; // Invalid team size requirement
         }
 
-        // Randomly select the correct number of players
-        const allPlayers = Object.values(game.players);
-        const shuffledPlayers = allPlayers.sort(() => 0.5 - Math.random()); // Shuffle players
-        const selectedTeamIds = shuffledPlayers.slice(0, requiredTeamSize).map(p => p.id); // Select the first 'requiredTeamSize' players
-        console.log("aiSubmitShiftingPrioritiesTeam: Selected team", { requiredTeamSize, selectedTeamIds });
+        // Get the original team that must be kept
+        const originalTeam = game.teamProposal?.selectedPlayers || [];
+        console.log("aiSubmitShiftingPrioritiesTeam: Original team", { originalTeam });
+
+        // We need to add exactly one player to the original team
+        // Find players who are not already on the team
+        const allPlayerIds = Object.keys(game.players);
+        const eligiblePlayers = allPlayerIds.filter(playerId => !originalTeam.includes(playerId));
+
+        if (eligiblePlayers.length === 0) {
+            console.log("aiSubmitShiftingPrioritiesTeam: No eligible players to add to the team");
+            return; // No eligible players
+        }
+
+        // Randomly select one player from the eligible players
+        const randomIndex = Math.floor(Math.random() * eligiblePlayers.length);
+        const selectedPlayerId = eligiblePlayers[randomIndex];
+
+        // Create the new team by adding the selected player to the original team
+        const selectedTeamIds = [...originalTeam, selectedPlayerId];
+        console.log("aiSubmitShiftingPrioritiesTeam: Selected team", {
+            requiredTeamSize,
+            originalTeam,
+            selectedPlayerId,
+            selectedTeamIds
+        });
 
         try {
-            // Call the submitShiftingPrioritiesTeam() method with the randomly selected team IDs and the AI's user ID
+            // Call the submitShiftingPrioritiesTeam() method with the selected team IDs and the AI's user ID
             await this.submitShiftingPrioritiesTeam(selectedTeamIds, currentUserId);
             console.log("aiSubmitShiftingPrioritiesTeam: Team submitted successfully");
         } catch (error) {
@@ -1315,9 +1347,18 @@ export class GameService {
             // Get the current mission team if available
             const currentMissionTeam = game.mission?.team || [];
 
+            // Calculate the new team size (current team size + 1)
+            // The TO must keep the current team and add one more player
+            const newTeamSize = currentMissionTeam.length + 1;
+
+            // Make sure the new team size doesn't exceed the required team size for the story
+            if (newTeamSize > requiredTeamSize) {
+                throw new Error(`Cannot add another player to the team. The current team already has ${currentMissionTeam.length} players, and the new story requires ${requiredTeamSize} players.`);
+            }
+
             // Instead of automatically forming a team, we'll transition to a new phase
             // where the Technical Owner can select players for the team
-            gameLogEntry.message += ` The Technical Owner needs to select ${requiredTeamSize} players for the new story.`;
+            gameLogEntry.message += ` The Technical Owner needs to keep the current team and add ${newTeamSize - currentMissionTeam.length} more player for the new story.`;
 
             // Update the game state to move to the next story and transition to the shiftingPriorities phase
             additionalUpdates = {
@@ -1326,8 +1367,8 @@ export class GameService {
                 poShiftedStories: [...poShiftedStories, nextStory], // Add the next story to the shifted stories array
                 status: 'shiftingPriorities', // Transition to the shiftingPriorities phase
                 teamProposal: {
-                    numToSelect: requiredTeamSize,
-                    selectedPlayers: [] // Start with an empty selection
+                    numToSelect: newTeamSize,
+                    selectedPlayers: currentMissionTeam // Start with the current team
                 },
                 teamVote: null // Clear any team votes
             };

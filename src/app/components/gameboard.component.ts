@@ -145,17 +145,29 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                             }
                             @case ('shiftingPriorities') {
                                 <div>
+                                    {{ initializeSelectedPlayers(game) }}
                                     @if (authService.userId() === game.currentTO_id) {
                                         <p class="mb-2">
                                             You are the TO. The Shifting Priorities card has been played.
-                                            Select {{ game.teamProposal?.numToSelect }} players for User Story OD-{{game.currentStoryNum}}.
+                                            <strong class="text-yellow-300">You must keep the current team and add exactly one more player.</strong>
+                                        </p>
+                                        <p class="mb-2">
+                                            Current team: <span class="font-bold">{{ getOriginalTeamNames(game) }}</span>
                                         </p>
                                         <div class="flex flex-wrap gap-2 mb-4">
                                             @for (playerId of game.playerOrder; track playerId) {
                                                 <button class="px-3 py-1 rounded"
-                                                        [ngClass]="{'bg-blue-500 text-white': selectedPlayers.includes(playerId), 'bg-gray-300 text-black': !selectedPlayers.includes(playerId)}"
+                                                        [ngClass]="{
+                                                            'bg-blue-500 text-white': selectedPlayers.includes(playerId),
+                                                            'bg-gray-300 text-black': !selectedPlayers.includes(playerId),
+                                                            'opacity-70 cursor-not-allowed': isOriginalTeamMember(playerId, game)
+                                                        }"
+                                                        [title]="isOriginalTeamMember(playerId, game) ? 'This player was on the original team and cannot be removed' : ''"
                                                         (click)="togglePlayerSelection(playerId, game)">
                                                         {{ game.players[playerId]?.name }}
+                                                        @if (isOriginalTeamMember(playerId, game)) {
+                                                            <span class="text-xs">*</span>
+                                                        }
                                                 </button>
                                             }
                                         </div>
@@ -168,6 +180,12 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                     } @else {
                                         <p class="mb-2">
                                             The Shifting Priorities card has been played. Waiting for {{ game.players[game.currentTO_id!].name }} (TO) to select a team for User Story OD-{{game.currentStoryNum}}.
+                                        </p>
+                                        <p class="mb-2">
+                                            <strong class="text-yellow-300">The TO must keep the current team and add exactly one more player.</strong>
+                                        </p>
+                                        <p class="mb-2">
+                                            Current team: <span class="font-bold">{{ getOriginalTeamNames(game) }}</span>
                                         </p>
                                     }
                                 </div>
@@ -414,6 +432,14 @@ export class GameBoardComponent {
     managementDesignatedPlayer: string | null = null; // Player ID designated to receive a management card
     showSidebar: boolean = false; // Controls visibility of the cards & roles sidebar
 
+    // Initialize selectedPlayers with the original team members for Shifting Priorities
+    initializeSelectedPlayers(game: Game): void {
+        if (game.status === 'shiftingPriorities' && game.teamProposal?.selectedPlayers) {
+            this.selectedPlayers = [...game.teamProposal.selectedPlayers];
+            console.log("Initialized selectedPlayers with original team:", this.selectedPlayers);
+        }
+    }
+
     // Toggle sidebar visibility
     toggleSidebar(): void {
         this.showSidebar = !this.showSidebar;
@@ -546,6 +572,16 @@ export class GameBoardComponent {
         return game.teamVote.proposedTeam.map(id => game.players[id]?.name || 'Unknown').join(', ');
     }
 
+    getOriginalTeamNames(game: Game): string {
+        if (!game.teamProposal?.selectedPlayers || game.teamProposal.selectedPlayers.length === 0) return 'N/A';
+        return game.teamProposal.selectedPlayers.map(id => game.players[id]?.name || 'Unknown').join(', ');
+    }
+
+    isOriginalTeamMember(playerId: string, game: Game): boolean {
+        if (!game.teamProposal?.selectedPlayers) return false;
+        return game.teamProposal.selectedPlayers.includes(playerId);
+    }
+
     getUserStoryTeamNames(game: Game): string {
         if (!game.mission?.team) return 'N/A';
         return game.mission.team.map(id => game.players[id]?.name || 'Unknown').join(', ');
@@ -616,20 +652,55 @@ export class GameBoardComponent {
     }
 
     togglePlayerSelection(playerId: string, game: Game): void {
-        const numToSelect = this.getNumToSelect(game);
+        // For Shifting Priorities, we need to handle team selection differently
+        if (game.status === 'shiftingPriorities') {
+            const numToSelect = game.teamProposal?.numToSelect || 0;
+            const originalTeam = game.teamProposal?.selectedPlayers || [];
 
-        // If player is already selected, remove them
-        if (this.selectedPlayers.includes(playerId)) {
-            this.selectedPlayers = this.selectedPlayers.filter(id => id !== playerId);
-        }
-        // If player is not selected and we haven't reached the limit, add them
-        else if (this.selectedPlayers.length < numToSelect) {
-            this.selectedPlayers.push(playerId);
-        }
-        // If we've reached the limit, replace the first selected player
-        else {
-            this.selectedPlayers.shift(); // Remove the first player
-            this.selectedPlayers.push(playerId); // Add the new player
+            // If player is already selected, only allow removal if they're not part of the original team
+            if (this.selectedPlayers.includes(playerId)) {
+                // Don't allow removing players from the original team
+                if (originalTeam.includes(playerId)) {
+                    console.log("Cannot remove player from original team during Shifting Priorities");
+                    return;
+                }
+                this.selectedPlayers = this.selectedPlayers.filter(id => id !== playerId);
+            }
+            // If player is not selected and we haven't reached the limit, add them
+            else if (this.selectedPlayers.length < numToSelect) {
+                this.selectedPlayers.push(playerId);
+            }
+            // If we've reached the limit, replace the last non-original team member
+            else {
+                // Find players who are not in the original team
+                const nonOriginalPlayers = this.selectedPlayers.filter(id => !originalTeam.includes(id));
+
+                if (nonOriginalPlayers.length > 0) {
+                    // Remove the last non-original player
+                    const lastNonOriginal = nonOriginalPlayers[nonOriginalPlayers.length - 1];
+                    this.selectedPlayers = this.selectedPlayers.filter(id => id !== lastNonOriginal);
+                    this.selectedPlayers.push(playerId); // Add the new player
+                } else {
+                    console.log("Cannot add more players, team is full and all members are from the original team");
+                }
+            }
+        } else {
+            // Regular team proposal logic
+            const numToSelect = this.getNumToSelect(game);
+
+            // If player is already selected, remove them
+            if (this.selectedPlayers.includes(playerId)) {
+                this.selectedPlayers = this.selectedPlayers.filter(id => id !== playerId);
+            }
+            // If player is not selected and we haven't reached the limit, add them
+            else if (this.selectedPlayers.length < numToSelect) {
+                this.selectedPlayers.push(playerId);
+            }
+            // If we've reached the limit, replace the first selected player
+            else {
+                this.selectedPlayers.shift(); // Remove the first player
+                this.selectedPlayers.push(playerId); // Add the new player
+            }
         }
     }
 

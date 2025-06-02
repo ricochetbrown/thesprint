@@ -1325,6 +1325,118 @@ export class GameService {
         }, 500);
     }
 
+    // Function to handle AI players in the loyalty reveal state
+    async aiHandleLoyaltyReveal(): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+
+        if (!gameId || !game) {
+            return; // No active game
+        }
+
+        // Check if we're in the loyaltyReveal phase
+        if (game.status !== 'loyaltyReveal') {
+            return; // Not in loyalty reveal phase
+        }
+
+        // Get the player who is revealing their loyalty
+        const revealingPlayerId = game.loyaltyRevealPlayerId;
+        if (!revealingPlayerId) {
+            return; // No player is revealing their loyalty
+        }
+
+        // Check if the revealing player is an AI
+        if (!revealingPlayerId.startsWith(gameId + '-AI-')) {
+            return; // Not an AI player
+        }
+
+        // Get the revealing player
+        const revealingPlayer = game.players[revealingPlayerId];
+        if (!revealingPlayer) {
+            return; // Revealing player not found
+        }
+
+        // Randomly select another player to reveal to
+        const playerIds = Object.keys(game.players).filter(id => id !== revealingPlayerId);
+
+        if (playerIds.length === 0) {
+            return; // No other players to reveal loyalty to
+        }
+
+        const randomIndex = Math.floor(Math.random() * playerIds.length);
+        const targetPlayerId = playerIds[randomIndex];
+
+        // Reveal loyalty to the selected player
+        await this.revealLoyaltyToPlayer(targetPlayerId);
+    }
+
+    // Function to reveal loyalty to a selected player
+    async revealLoyaltyToPlayer(targetPlayerId: string): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+
+        if (!gameId || !game) {
+            throw new Error("Game not available.");
+        }
+
+        // Check if we're in the loyaltyReveal phase
+        if (game.status !== 'loyaltyReveal') {
+            throw new Error("Not in loyalty reveal phase.");
+        }
+
+        // Get the player who is revealing their loyalty
+        const revealingPlayerId = game.loyaltyRevealPlayerId;
+        if (!revealingPlayerId) {
+            throw new Error("No player is revealing their loyalty.");
+        }
+
+        // Get the revealing player
+        const revealingPlayer = game.players[revealingPlayerId];
+        if (!revealingPlayer) {
+            throw new Error("Revealing player not found.");
+        }
+
+        // Get the target player
+        const targetPlayer = game.players[targetPlayerId];
+        if (!targetPlayer) {
+            throw new Error("Target player not found.");
+        }
+
+        // Get the revealing player's role to determine their squad loyalty
+        const playerRole = game.roles?.[revealingPlayerId];
+        if (!playerRole) {
+            throw new Error("Player role not found.");
+        }
+
+        // Determine if the player is Dexter or Sinister
+        const isDexter = playerRole.includes('Dexter') || playerRole === 'Duke' || playerRole === 'SupportManager';
+        const squadLoyalty = isDexter ? 'dexter' : 'sinister';
+
+        // Create a log entry for the loyalty reveal
+        const gameLogEntry = {
+            timestamp: new Date(),
+            message: `${revealingPlayer.name} revealed their loyalty to ${targetPlayer.name}.`
+        };
+
+        // Update the game state to record the loyalty reveal
+        const revealedLoyalties = game.revealedLoyalties || {};
+        revealedLoyalties[revealingPlayerId] = {
+            targetId: targetPlayerId,
+            timestamp: Timestamp.now()
+        };
+
+        // Return to the previous game state
+        const previousStatus = game.mission ? 'mission' : (game.teamVote ? 'teamVoting' : 'teamProposal');
+
+        // Update the game
+        await this.firestoreService.updateDocument('games', gameId, {
+            status: previousStatus,
+            loyaltyRevealPlayerId: null,
+            revealedLoyalties: revealedLoyalties,
+            gameLog: [...(game.gameLog || []), gameLogEntry]
+        }, true);
+    }
+
     // Function to play a management card
     async playManagementCard(overrideUserId?: string): Promise<void> {
         const gameId = this.activeGameId();
@@ -1454,41 +1566,21 @@ export class GameService {
             // "People Person" card effect:
             // The player needs to select another player to reveal their squad loyalty to
 
-            // For now, we'll randomly select another player to reveal to
-            // In a real implementation, the player would choose who to reveal to
-            const playerIds = Object.keys(game.players).filter(id => id !== currentUserId);
-
-            if (playerIds.length === 0) {
-                throw new Error("No other players to reveal loyalty to.");
-            }
-
-            const randomIndex = Math.floor(Math.random() * playerIds.length);
-            const targetPlayerId = playerIds[randomIndex];
-
-            // Get the player's role to determine their squad loyalty
-            const playerRole = game.roles?.[currentUserId];
-
-            if (!playerRole) {
-                throw new Error("Player role not found.");
-            }
-
-            // Determine if the player is Dexter or Sinister
-            const isDexter = playerRole.includes('Dexter') || playerRole === 'Duke' || playerRole === 'SupportManager';
-            const squadLoyalty = isDexter ? 'dexter' : 'sinister';
-
-            // Add log entry for loyalty reveal
-            gameLogEntry.message += ` ${player.name} revealed their loyalty to ${game.players[targetPlayerId].name}.`;
-
-            // Update the game state to record the loyalty reveal
-            const revealedLoyalties = game.revealedLoyalties || {};
-            revealedLoyalties[currentUserId] = {
-                targetId: targetPlayerId,
-                timestamp: Timestamp.now()
-            };
+            // Update the game state to transition to the loyaltyReveal phase
+            // The player will select who to reveal their loyalty to in this phase
+            gameLogEntry.message += ` ${player.name} can now select a player to reveal their loyalty to.`;
 
             additionalUpdates = {
-                revealedLoyalties: revealedLoyalties
+                status: 'loyaltyReveal',
+                loyaltyRevealPlayerId: currentUserId
             };
+
+            // If this is an AI player, handle the loyalty reveal automatically after a short delay
+            if (currentUserId.startsWith(gameId + '-AI-')) {
+                setTimeout(() => {
+                    this.aiHandleLoyaltyReveal();
+                }, 1000);
+            }
         } else if (cardInfo.name === 'Preliminary Review') {
             // "Preliminary Review" card effect:
             // Designate a player to review the User Story publicly for all to see

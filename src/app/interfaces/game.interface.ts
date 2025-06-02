@@ -7,7 +7,7 @@ export interface Game {
     name?: string;
     hostId: string;
     hostName?: string;
-    status: 'lobby' | 'starting' | 'teamProposal' | 'teamVoting' | 'mission' | 'results' | 'assassination' | 'gameOver' | 'shiftingPriorities';
+    status: 'lobby' | 'starting' | 'teamProposal' | 'teamVoting' | 'mission' | 'results' | 'assassination' | 'gameOver' | 'shiftingPriorities' | 'loyaltyReveal';
     players: { [playerId: string]: Player }; // Player objects keyed by player ID
     playerOrder: string[]; // Array of player IDs to maintain order
     settings: {
@@ -84,4 +84,5 @@ export interface Game {
             timestamp: Timestamp;
         }
     }; // Tracks which players have revealed their loyalty to which other players
+    loyaltyRevealPlayerId?: string; // Player ID who is currently revealing their loyalty
 }

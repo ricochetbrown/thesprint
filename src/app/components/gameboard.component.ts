@@ -316,6 +316,25 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                     <button (click)="gameService.leaveGame()" class="bg-gray-500 px-4 py-2 rounded">Back to Dashboard</button>
                                 </div>
                             }
+                            @case ('loyaltyReveal') {
+                                <div>
+                                    @if (authService.userId() === game.loyaltyRevealPlayerId) {
+                                        <h3 class="text-xl font-bold mb-4">Select a player to reveal your loyalty to:</h3>
+                                        <div class="flex flex-wrap gap-2 mb-4">
+                                            @for (playerId of game.playerOrder; track playerId) {
+                                                @if (playerId !== authService.userId()) {
+                                                    <button class="px-3 py-1 rounded bg-purple-500 hover:bg-purple-600 text-white"
+                                                            (click)="revealLoyaltyToPlayer(playerId, game)">
+                                                        {{ game.players[playerId]?.name }}
+                                                    </button>
+                                                }
+                                            }
+                                        </div>
+                                    } @else {
+                                        <p class="mb-4">Waiting for {{ game.players[game.loyaltyRevealPlayerId!]?.name }} to select a player to reveal their loyalty to...</p>
+                                    }
+                                </div>
+                            }
                             @default {
                                 <p>Waiting for game to progress...</p>
                             }
@@ -703,6 +722,11 @@ export class GameBoardComponent {
             // Otherwise, designate them
             this.managementDesignatedPlayer = playerId;
         }
+    }
+
+    revealLoyaltyToPlayer(playerId: string, game: Game): void {
+        // Call the game service to reveal loyalty to the selected player
+        this.gameService.revealLoyaltyToPlayer(playerId);
     }
 
     togglePlayerSelection(playerId: string, game: Game): void {

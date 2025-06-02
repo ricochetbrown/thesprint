@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnInit, effect } from "@angular/core";
+import {Component, inject, signal, OnInit, computed} from "@angular/core";
 import { AuthService } from "../services/auth.service";
 import { GameService } from "../services/game.service";
 import { FormsModule } from "@angular/forms";
@@ -153,17 +153,13 @@ export class DashboardComponent implements OnInit {
     playerCounts = signal<Record<string, number>>({});
 
     // Check if the current user is the admin (ricochetbrown@gmail.com)
-    isAdmin = signal<boolean>(false);
+    isAdmin = computed(() => {
+        const currentUser = this.authService.currentUser();
+        return currentUser?.email === 'ricochetbrown@gmail.com';
+    });
 
-    ngOnInit() {
-        this.fetchPublicGames();
-
-        // Check if the current user is the admin
-        effect(() => {
-            const currentUser = this.authService.currentUser();
-            console.log("Current user:", currentUser);
-            this.isAdmin.set(currentUser?.email === 'ricochetbrown@gmail.com');
-        });
+    async ngOnInit() {
+        await this.fetchPublicGames();
     }
 
     async deleteAllGames() {

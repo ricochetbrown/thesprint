@@ -848,6 +848,14 @@ export class GameService {
                             const currentGame = this.currentGame();
                             if (currentGame && currentGame.status === 'mission') {
                                 console.log("Safety check: Game still in mission state, forcing check for all cards played");
+
+                                // If we're in management phase but all players are AI, force AI players to submit cards
+                                if (currentGame.managementPhase || currentGame.managementCardPlayPhase) {
+                                    console.log("Safety check: Game in management phase but all players are AI, forcing AI to submit cards");
+                                    // Force AI players to submit their cards despite management phase
+                                    await this.submitAllAIMissionCards(aiPlayersOnMission);
+                                }
+
                                 // Force a check for all cards played
                                 if (currentGame.mission?.team && currentGame.mission?.cardsPlayed) {
                                     const updatedGame = { ...currentGame };
@@ -1173,6 +1181,22 @@ export class GameService {
                 if (aiPlayersOnMission.length > 0) {
                     console.log(`drawManagementCard: Triggering ${aiPlayersOnMission.length} AI players to submit mission cards`);
                     await this.submitAllAIMissionCards(aiPlayersOnMission);
+
+                    // If all players on the mission are AI, add an additional safety check
+                    if (aiPlayersOnMission.length === currentGame.mission.team.length) {
+                        console.log("drawManagementCard: All players on mission are AI, adding additional safety check");
+                        // Add a short timeout to ensure the game state has been updated
+                        setTimeout(async () => {
+                            const latestGame = this.currentGame();
+                            if (latestGame && latestGame.status === 'mission') {
+                                console.log("drawManagementCard safety check: Forcing check for all cards played");
+                                if (latestGame.mission?.team && latestGame.mission?.cardsPlayed) {
+                                    const updatedGame = { ...latestGame };
+                                    await this.checkIfAllCardsPlayed(updatedGame, latestGame.mission.cardsPlayed);
+                                }
+                            }
+                        }, 1000);
+                    }
                 }
             }
         }, 500);
@@ -1271,6 +1295,22 @@ export class GameService {
                 if (aiPlayersOnMission.length > 0) {
                     console.log(`skipPlayingManagementCard: Triggering ${aiPlayersOnMission.length} AI players to submit mission cards`);
                     await this.submitAllAIMissionCards(aiPlayersOnMission);
+
+                    // If all players on the mission are AI, add an additional safety check
+                    if (aiPlayersOnMission.length === currentGame.mission.team.length) {
+                        console.log("skipPlayingManagementCard: All players on mission are AI, adding additional safety check");
+                        // Add a short timeout to ensure the game state has been updated
+                        setTimeout(async () => {
+                            const latestGame = this.currentGame();
+                            if (latestGame && latestGame.status === 'mission') {
+                                console.log("skipPlayingManagementCard safety check: Forcing check for all cards played");
+                                if (latestGame.mission?.team && latestGame.mission?.cardsPlayed) {
+                                    const updatedGame = { ...latestGame };
+                                    await this.checkIfAllCardsPlayed(updatedGame, latestGame.mission.cardsPlayed);
+                                }
+                            }
+                        }, 1000);
+                    }
                 }
             }
         }, 500);
@@ -1320,6 +1360,22 @@ export class GameService {
                 if (aiPlayersOnMission.length > 0) {
                     console.log(`skipManagementCard: Triggering ${aiPlayersOnMission.length} AI players to submit mission cards`);
                     await this.submitAllAIMissionCards(aiPlayersOnMission);
+
+                    // If all players on the mission are AI, add an additional safety check
+                    if (aiPlayersOnMission.length === currentGame.mission.team.length) {
+                        console.log("skipManagementCard: All players on mission are AI, adding additional safety check");
+                        // Add a short timeout to ensure the game state has been updated
+                        setTimeout(async () => {
+                            const latestGame = this.currentGame();
+                            if (latestGame && latestGame.status === 'mission') {
+                                console.log("skipManagementCard safety check: Forcing check for all cards played");
+                                if (latestGame.mission?.team && latestGame.mission?.cardsPlayed) {
+                                    const updatedGame = { ...latestGame };
+                                    await this.checkIfAllCardsPlayed(updatedGame, latestGame.mission.cardsPlayed);
+                                }
+                            }
+                        }, 1000);
+                    }
                 }
             }
         }, 500);
@@ -1641,6 +1697,22 @@ export class GameService {
                 if (aiPlayersOnMission.length > 0) {
                     console.log(`playManagementCard: Triggering ${aiPlayersOnMission.length} AI players to submit mission cards`);
                     await this.submitAllAIMissionCards(aiPlayersOnMission);
+
+                    // If all players on the mission are AI, add an additional safety check
+                    if (aiPlayersOnMission.length === currentGame.mission.team.length) {
+                        console.log("playManagementCard: All players on mission are AI, adding additional safety check");
+                        // Add a short timeout to ensure the game state has been updated
+                        setTimeout(async () => {
+                            const latestGame = this.currentGame();
+                            if (latestGame && latestGame.status === 'mission') {
+                                console.log("playManagementCard safety check: Forcing check for all cards played");
+                                if (latestGame.mission?.team && latestGame.mission?.cardsPlayed) {
+                                    const updatedGame = { ...latestGame };
+                                    await this.checkIfAllCardsPlayed(updatedGame, latestGame.mission.cardsPlayed);
+                                }
+                            }
+                        }, 1000);
+                    }
                 }
             }
         }, 500);
@@ -1725,10 +1797,18 @@ export class GameService {
             return; // No active game or no mission
         }
 
-        // Check if we're in the management phase or management card play phase - if so, don't submit any cards yet
+        // Check if we're in the management phase or management card play phase
         if (game.managementPhase || game.managementCardPlayPhase) {
-            console.log("submitAllAIMissionCards: In management phase or management card play phase, waiting for management card to be drawn or played");
-            return; // Wait for management card to be drawn and played or skipped
+            // Check if all players on the mission are AI players
+            const allAI = game.mission.team?.every(playerId => playerId.startsWith(gameId + '-AI-')) || false;
+
+            // If all players are AI, proceed anyway to prevent the game from getting stuck
+            if (allAI) {
+                console.log("submitAllAIMissionCards: All players on mission are AI, proceeding despite management phase");
+            } else {
+                console.log("submitAllAIMissionCards: In management phase or management card play phase, waiting for management card to be drawn or played");
+                return; // Wait for management card to be drawn and played or skipped
+            }
         }
 
         console.log("submitAllAIMissionCards: Game status", game.status);

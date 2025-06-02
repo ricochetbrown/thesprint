@@ -1481,7 +1481,7 @@ export class GameService {
             const squadLoyalty = isDexter ? 'dexter' : 'sinister';
 
             // Add log entry for loyalty reveal
-            gameLogEntry.message += ` ${player.name} revealed their squad loyalty to ${game.players[targetPlayerId].name}.`;
+            gameLogEntry.message += ` ${player.name} revealed their ${squadLoyalty} squad loyalty to ${game.players[targetPlayerId].name}.`;
 
             // Update the game state to record the loyalty reveal
             const revealedLoyalties = game.revealedLoyalties || {};

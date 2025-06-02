@@ -364,8 +364,19 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                         </div>
 
                         <div class="bg-slate-700 bg-opacity-90 p-3 rounded">
-                            <h4 class="font-semibold border-b border-slate-600 pb-1 mb-1 text-sm">Game Chat (Conceptual)</h4>
-                            <div class="h-20 overflow-y-auto text-xs bg-slate-800 p-1 rounded"></div>
+                            <h4 class="font-semibold border-b border-slate-600 pb-1 mb-1 text-sm">Game Log</h4>
+                            <div class="h-40 overflow-y-auto text-xs bg-slate-800 p-2 rounded">
+                                @if (game.gameLog && game.gameLog.length > 0) {
+                                    @for (logEntry of getRecentGameLogs(game); track $index) {
+                                        <div class="mb-1 pb-1 border-b border-slate-700">
+                                            <span class="text-gray-400">{{ formatTimestamp(logEntry.timestamp) }}:</span>
+                                            <span>{{ logEntry.message }}</span>
+                                        </div>
+                                    }
+                                } @else {
+                                    <div class="text-gray-400 italic">No game logs yet.</div>
+                                }
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -473,6 +484,25 @@ export class GameBoardComponent {
     // Get all management card IDs
     getAllManagementCardIds(): string[] {
         return Object.keys(MANAGEMENT_CARDS);
+    }
+
+    // Get recent game logs (most recent first)
+    getRecentGameLogs(game: Game): { timestamp: any, message: string }[] {
+        if (!game.gameLog || game.gameLog.length === 0) return [];
+
+        // Return a copy of the game log array in reverse order (newest first)
+        return [...game.gameLog].reverse().slice(0, 20); // Show last 20 log entries
+    }
+
+    // Format timestamp for display
+    formatTimestamp(timestamp: any): string {
+        if (!timestamp) return '';
+
+        // Handle both Date objects and Firestore Timestamps
+        const date = timestamp instanceof Date ? timestamp : timestamp.toDate();
+
+        // Format as HH:MM:SS
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     }
 
     // Get all active roles in the game

@@ -7,7 +7,7 @@ export interface Game {
     name?: string;
     hostId: string;
     hostName?: string;
-    status: 'lobby' | 'starting' | 'teamProposal' | 'teamVoting' | 'mission' | 'results' | 'assassination' | 'gameOver' | 'shiftingPriorities' | 'loyaltyReveal' | 'ceoCardPlay';
+    status: 'lobby' | 'starting' | 'teamProposal' | 'teamVoting' | 'mission' | 'results' | 'assassination' | 'gameOver' | 'shiftingPriorities' | 'loyaltyReveal' | 'ceoCardPlay' | 'scopeCreep' | 'securityAudit' | 'serviceReassignment' | 'itsShowTime';
     players: { [playerId: string]: Player }; // Player objects keyed by player ID
     playerOrder: string[]; // Array of player IDs to maintain order
     settings: {
@@ -90,5 +90,41 @@ export interface Game {
     ceoCardPlayerId?: string; // Player ID who played the CEO card
     ceoCardDrawnCards?: string[]; // Cards drawn when playing CEO card (when no other player has a management card)
     ceoCardSelectedCard?: string; // Card selected from the drawn cards
-    previousStatus?: 'lobby' | 'starting' | 'teamProposal' | 'teamVoting' | 'mission' | 'results' | 'assassination' | 'gameOver' | 'shiftingPriorities' | 'loyaltyReveal' | 'ceoCardPlay'; // Previous game status before special phase
+
+    // Scope Creep card properties
+    scopeCreepPlayerId?: string; // Player ID who played the Scope Creep card
+
+    // Security Audit card properties
+    securityAuditPlayerId?: string; // Player ID who played the Security Audit card
+    securityAuditPhase?: boolean; // Whether we're in the security audit phase
+    securityAuditTargetId?: string; // Player ID whose PR review selection is being inspected
+    securityAuditResult?: 'approve' | 'request'; // The result of the inspection (what card the target played)
+
+    // Service Reassignment card properties
+    serviceReassignmentPlayerId?: string; // Player ID who played the Service Reassignment card
+    serviceReassignmentPhase?: boolean; // Whether we're in the service reassignment phase
+    serviceReassignmentPlayerToRemove?: string; // Player ID to remove from the team
+    serviceReassignmentPlayerToAdd?: string; // Player ID to add to the team
+
+    // CTO Foam Dart Assault card properties
+    foamDartAssaultPlayerId?: string; // Player ID who played the Foam Dart Assault card
+    foamDartAssaultPhase?: boolean; // Whether we're in the foam dart assault phase
+    foamDartAssaultStoryToRedo?: number; // Story number to redo
+    foamDartAssaultPlayerToRemove?: string; // Player ID to remove from the original team
+    foamDartAssaultOriginalTeam?: string[]; // Original team for the story being redone
+
+    // VP Sales "It's Show Time!" card properties
+    itsShowTimePlayerId?: string; // Player ID who played the VP Sales card
+    itsShowTimePhase?: boolean; // Whether we're in the It's Show Time phase
+    itsShowTimePlayersToAdd?: string[]; // Player IDs to add to the team (up to 2)
+    itsShowTimeShuffledReviews?: ('approve' | 'request')[]; // Shuffled reviews for the team
+    itsShowTimeRevealedReviews?: ('approve' | 'request')[]; // Top three revealed reviews
+
+    // Sales Rep "Rush Job, Tech Debt!" card properties
+    rushJobTechDebt?: boolean; // Flag to indicate that all Sinister spies must request changes
+    rushJobTechDebtMerge?: boolean; // Flag to indicate that the result is a merge no matter what
+    rushJobTechDebtNextStory?: number; // Next story number to add an additional team member
+    rushJobTechDebtNextStoryAdditionalMember?: boolean; // Whether the next story has one additional team member
+
+    previousStatus?: 'lobby' | 'starting' | 'teamProposal' | 'teamVoting' | 'mission' | 'results' | 'assassination' | 'gameOver' | 'shiftingPriorities' | 'loyaltyReveal' | 'ceoCardPlay' | 'scopeCreep' | 'securityAudit' | 'serviceReassignment' | 'foamDartAssault' | 'itsShowTime'; // Previous game status before special phase
 }

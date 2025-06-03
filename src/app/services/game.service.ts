@@ -289,12 +289,15 @@ export class GameService {
     }
 
     private initializeManagementDeck(): string[] {
-        // Create the management deck with 6 cards
-        // 2 PO - Shifting Priorities, 2 HR - People Person cards, and 2 TL - Preliminary Review cards
+        // Create the management deck with 8 cards
+        // 2 PO - Shifting Priorities, 2 HR - People Person cards, 2 TL - Preliminary Review cards,
+        // 1 CMO - Scope Creep! card, and 1 VP R&D - Service Reassignment! card
         const managementDeck = [
             'po', 'po', // 2 PO cards (Shifting Priorities)
             'hr', 'hr', // 2 HR cards (People Person)
-            'tl', 'tl'  // 2 TL cards (Preliminary Review)
+            'tl', 'tl', // 2 TL cards (Preliminary Review)
+            'cmo',      // 1 CMO card (Scope Creep!)
+            'joe'       // 1 VP R&D card (Service Reassignment!)
         ];
 
         // Shuffle the deck
@@ -496,6 +499,142 @@ export class GameService {
         }, true);
     }
 
+    // Function to submit the additional team member for Scope Creep
+    async submitScopeCreepTeam(additionalPlayerId: string, overrideUserId?: string): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = overrideUserId || this.authService.userId();
+
+        console.log("submitScopeCreepTeam called with", { additionalPlayerId, currentUserId, overrideUserId });
+
+        if (!gameId || !game || !currentUserId) {
+            throw new Error("Game or user not available.");
+        }
+
+        // Check if we're in the scopeCreep phase
+        if (game.status !== 'scopeCreep') {
+            console.error("submitScopeCreepTeam: Not in the Scope Creep phase", { status: game.status });
+            throw new Error("Not in the Scope Creep phase.");
+        }
+
+        // Check if the current user is the one who played the Scope Creep card
+        if (game.scopeCreepPlayerId !== currentUserId) {
+            console.error("submitScopeCreepTeam: User is not the Scope Creep player", { currentUserId, scopeCreepPlayerId: game.scopeCreepPlayerId });
+            throw new Error("Only the player who played the Scope Creep card can select an additional team member.");
+        }
+
+        // Check if the selected player exists in the game
+        if (!game.players[additionalPlayerId]) {
+            throw new Error(`Player ${additionalPlayerId} does not exist in the game.`);
+        }
+
+        // Get the current mission team
+        const currentMissionTeam = game.mission?.team || [];
+
+        // Check if the selected player is already on the team
+        if (currentMissionTeam.includes(additionalPlayerId)) {
+            throw new Error("The selected player is already on the team.");
+        }
+
+        // Add the additional player to the mission team
+        const updatedTeam = [...currentMissionTeam, additionalPlayerId];
+
+        // Get the previous status to return to
+        const previousStatus = game.previousStatus || 'mission';
+
+        // Update the game with the new team
+        await this.firestoreService.updateDocument('games', gameId, {
+            status: previousStatus,
+            mission: {
+                ...game.mission,
+                team: updatedTeam
+            },
+            scopeCreepPlayerId: null, // Clear the Scope Creep player ID
+            previousStatus: null, // Clear the previous status
+            gameLog: [...(game.gameLog || []), {
+                timestamp: new Date(),
+                message: `${game.players[currentUserId]?.name} added ${game.players[additionalPlayerId]?.name} to the team using the Scope Creep card.`
+            }]
+        }, true);
+    }
+
+    // Function to submit the team for the It's Show Time! card
+    async submitItsShowTimeTeam(additionalPlayerIds: string[], overrideUserId?: string): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = overrideUserId || this.authService.userId();
+
+        console.log("submitItsShowTimeTeam called with", { additionalPlayerIds, currentUserId, overrideUserId });
+
+        if (!gameId || !game || !currentUserId) {
+            throw new Error("Game or user not available.");
+        }
+
+        // Check if we're in the itsShowTime phase
+        if (game.status !== 'itsShowTime') {
+            console.error("submitItsShowTimeTeam: Not in the It's Show Time! phase", { status: game.status });
+            throw new Error("Not in the It's Show Time! phase.");
+        }
+
+        // Check if the current user is the one who played the It's Show Time! card
+        if (game.itsShowTimePlayerId !== currentUserId) {
+            console.error("submitItsShowTimeTeam: User is not the It's Show Time! player", { currentUserId, itsShowTimePlayerId: game.itsShowTimePlayerId });
+            throw new Error("Only the player who played the It's Show Time! card can select additional team members.");
+        }
+
+        // Check if the correct number of players are being added
+        if (additionalPlayerIds.length > 2) {
+            throw new Error("You can only add up to 2 players to the team.");
+        }
+
+        // Get the current mission team
+        const currentMissionTeam = game.mission?.team || [];
+
+        // Check if any of the additional players are already on the team
+        for (const playerId of additionalPlayerIds) {
+            // Check if the selected player exists in the game
+            if (!game.players[playerId]) {
+                throw new Error(`Player ${playerId} does not exist in the game.`);
+            }
+
+            if (currentMissionTeam.includes(playerId)) {
+                throw new Error(`${game.players[playerId].name} is already on the team.`);
+            }
+        }
+
+        // Add the additional players to the team
+        const updatedTeam = [...currentMissionTeam, ...additionalPlayerIds];
+
+        // Add a log entry
+        const playerNames = additionalPlayerIds.map(id => game.players[id].name).join(' and ');
+        const logMessage = additionalPlayerIds.length > 0
+            ? `${game.players[currentUserId].name} added ${playerNames} to the team for story ${game.currentStoryNum}.`
+            : `${game.players[currentUserId].name} did not add any players to the team for story ${game.currentStoryNum}.`;
+
+        // Update the game with the new team
+        await this.firestoreService.updateDocument('games', gameId, {
+            mission: {
+                ...game.mission,
+                team: updatedTeam
+            },
+            itsShowTimePlayersToAdd: additionalPlayerIds,
+            gameLog: [...(game.gameLog || []), {
+                timestamp: new Date(),
+                message: logMessage
+            }]
+        }, true);
+
+        // Process the shuffling and revealing of cards
+        await this.processItsShowTimeResults(gameId, {
+          ...game,
+          mission: {
+            ...game.mission,
+            cardsPlayed: game.mission!.cardsPlayed,
+            team: updatedTeam
+          }
+        });
+    }
+
     async proposeTeam(team: Player[], overrideUserId?: string, managementDesignatedPlayerId?: string): Promise<void> {
         const gameId = this.activeGameId();
         const game = this.currentGame();
@@ -514,7 +653,9 @@ export class GameService {
         }
 
         // 2. Check if the number of proposed players is correct for the current story.
-        const requiredTeamSize = this.getRequiredTeamSize(Object.keys(game.players).length, game.currentStoryNum ?? 1);
+        let currentStory = game.currentStoryNum ?? 1;
+        const addExtraMember = game.rushJobTechDebtNextStoryAdditionalMember && currentStory === game.rushJobTechDebtNextStory;
+        const requiredTeamSize = this.getRequiredTeamSize(Object.keys(game.players).length, currentStory, addExtraMember);
         if (team.length !== requiredTeamSize) {
             throw new Error(`Incorrect team size. Story ${game.currentStoryNum} requires a team of ${requiredTeamSize} players.`);
         }
@@ -534,7 +675,7 @@ export class GameService {
         }
 
         // Only allow management designation for stories 1-4
-        const currentStory = game.currentStoryNum || 1;
+        currentStory = game.currentStoryNum || 1;
         if (currentStory <= 4) {
             // If no player was designated, we'll set managementDesignatedPlayer to null
             // This allows the UI to know that the TO didn't select anyone
@@ -571,7 +712,7 @@ export class GameService {
     }
 
     // Helper method to determine required team size based on player count and story number
-    private getRequiredTeamSize(numPlayers: number, storyNum: number): number {
+    private getRequiredTeamSize(numPlayers: number, storyNum: number, addExtraMember: boolean = false): number {
         // These numbers are based on "The Sprint" manual's player count vs team size table.
         // Adjust if using different rules or game variants.
         if (numPlayers < 5 || numPlayers > 12) {
@@ -593,7 +734,17 @@ export class GameService {
         if (storyNum < 1 || storyNum > 5 || !teamSizes[numPlayers]) {
             throw new Error(`Invalid story number (${storyNum}) or player count (${numPlayers}).`);
         }
-        return teamSizes[numPlayers][storyNum - 1];
+
+        // Get the base team size
+        let teamSize = teamSizes[numPlayers][storyNum - 1];
+
+        // Add an extra member if requested (e.g., due to Rush Job, Tech Debt! card)
+        if (addExtraMember) {
+            teamSize += 1;
+            console.log(`getRequiredTeamSize: Adding an extra team member for story ${storyNum}. New team size: ${teamSize}`);
+        }
+
+        return teamSize;
     }
 
     async aiProposeTeam(): Promise<void> {
@@ -619,7 +770,9 @@ export class GameService {
         }
 
         // Randomly select the correct number of players for the current story
-        const requiredTeamSize = this.getRequiredTeamSize(Object.keys(game.players).length, game.currentStoryNum ?? 1);
+        let currentStory = game.currentStoryNum ?? 1;
+        const addExtraMember = game.rushJobTechDebtNextStoryAdditionalMember && currentStory === game.rushJobTechDebtNextStory;
+        const requiredTeamSize = this.getRequiredTeamSize(Object.keys(game.players).length, currentStory, addExtraMember);
         const allPlayers = Object.values(game.players);
         const shuffledPlayers = allPlayers.sort(() => 0.5 - Math.random()); // Shuffle players
         const proposedTeam = shuffledPlayers.slice(0, requiredTeamSize); // Select the first 'requiredTeamSize' players
@@ -627,7 +780,7 @@ export class GameService {
 
         // Randomly select a player for management designation (only for stories 1-4)
         let managementDesignatedPlayerId: string | undefined = undefined;
-        const currentStory = game.currentStoryNum || 1;
+        currentStory = game.currentStoryNum || 1;
 
         if (currentStory <= 4) {
             // Get all players who are not on the proposed team
@@ -1166,6 +1319,12 @@ export class GameService {
             gameLog: [...(game.gameLog || []), ...gameLogEntries]
         }, true);
 
+        // Determine if this is a human player or AI
+        const isHumanPlayer = !currentUserId.startsWith(gameId + '-AI-');
+
+        // Use a longer delay for human players to ensure they can see what happened
+        const delay = isHumanPlayer ? 3000 : 500;
+
         // Give AI players a chance to play their management cards
         setTimeout(async () => {
             await this.aiPlayManagementCard();
@@ -1180,26 +1339,33 @@ export class GameService {
 
                 if (aiPlayersOnMission.length > 0) {
                     console.log(`drawManagementCard: Triggering ${aiPlayersOnMission.length} AI players to submit mission cards`);
-                    await this.submitAllAIMissionCards(aiPlayersOnMission);
 
-                    // If all players on the mission are AI, add an additional safety check
-                    if (aiPlayersOnMission.length === currentGame.mission.team.length) {
-                        console.log("drawManagementCard: All players on mission are AI, adding additional safety check");
-                        // Add a short timeout to ensure the game state has been updated
-                        setTimeout(async () => {
-                            const latestGame = this.currentGame();
-                            if (latestGame && latestGame.status === 'mission') {
-                                console.log("drawManagementCard safety check: Forcing check for all cards played");
-                                if (latestGame.mission?.team && latestGame.mission?.cardsPlayed) {
-                                    const updatedGame = { ...latestGame };
-                                    await this.checkIfAllCardsPlayed(updatedGame, latestGame.mission.cardsPlayed);
+                    // If all players on the mission are AI but a human player drew the card,
+                    // add an extra delay to ensure the human player can see what happened
+                    const missionDelay = (isHumanPlayer && aiPlayersOnMission.length === currentGame.mission.team.length) ? 2000 : 500;
+
+                    setTimeout(async () => {
+                        await this.submitAllAIMissionCards(aiPlayersOnMission);
+
+                        // If all players on the mission are AI, add an additional safety check
+                        if (aiPlayersOnMission.length === currentGame.mission?.team.length) {
+                            console.log("drawManagementCard: All players on mission are AI, adding additional safety check");
+                            // Add a short timeout to ensure the game state has been updated
+                            setTimeout(async () => {
+                                const latestGame = this.currentGame();
+                                if (latestGame && latestGame.status === 'mission') {
+                                    console.log("drawManagementCard safety check: Forcing check for all cards played");
+                                    if (latestGame.mission?.team && latestGame.mission?.cardsPlayed) {
+                                        const updatedGame = { ...latestGame };
+                                        await this.checkIfAllCardsPlayed(updatedGame, latestGame.mission.cardsPlayed);
+                                    }
                                 }
-                            }
-                        }, 1000);
-                    }
+                            }, 1000);
+                        }
+                    }, missionDelay);
                 }
             }
-        }, 500);
+        }, delay);
     }
 
     // Function for AI to draw a management card
@@ -1280,6 +1446,12 @@ export class GameService {
             gameLog: [...(game.gameLog || []), gameLogEntry]
         }, true);
 
+        // Determine if this is a human player or AI
+        const isHumanPlayer = !currentUserId.startsWith(gameId + '-AI-');
+
+        // Use a longer delay for human players to ensure they can see what happened
+        const delay = isHumanPlayer ? 3000 : 500;
+
         // Give AI players a chance to play their management cards
         setTimeout(async () => {
             await this.aiPlayManagementCard();
@@ -1294,26 +1466,33 @@ export class GameService {
 
                 if (aiPlayersOnMission.length > 0) {
                     console.log(`skipPlayingManagementCard: Triggering ${aiPlayersOnMission.length} AI players to submit mission cards`);
-                    await this.submitAllAIMissionCards(aiPlayersOnMission);
 
-                    // If all players on the mission are AI, add an additional safety check
-                    if (aiPlayersOnMission.length === currentGame.mission.team.length) {
-                        console.log("skipPlayingManagementCard: All players on mission are AI, adding additional safety check");
-                        // Add a short timeout to ensure the game state has been updated
-                        setTimeout(async () => {
-                            const latestGame = this.currentGame();
-                            if (latestGame && latestGame.status === 'mission') {
-                                console.log("skipPlayingManagementCard safety check: Forcing check for all cards played");
-                                if (latestGame.mission?.team && latestGame.mission?.cardsPlayed) {
-                                    const updatedGame = { ...latestGame };
-                                    await this.checkIfAllCardsPlayed(updatedGame, latestGame.mission.cardsPlayed);
+                    // If all players on the mission are AI but a human player skipped playing the card,
+                    // add an extra delay to ensure the human player can see what happened
+                    const missionDelay = (isHumanPlayer && aiPlayersOnMission.length === currentGame.mission.team.length) ? 2000 : 500;
+
+                    setTimeout(async () => {
+                        await this.submitAllAIMissionCards(aiPlayersOnMission);
+
+                        // If all players on the mission are AI, add an additional safety check
+                        if (aiPlayersOnMission.length === currentGame.mission?.team.length) {
+                            console.log("skipPlayingManagementCard: All players on mission are AI, adding additional safety check");
+                            // Add a short timeout to ensure the game state has been updated
+                            setTimeout(async () => {
+                                const latestGame = this.currentGame();
+                                if (latestGame && latestGame.status === 'mission') {
+                                    console.log("skipPlayingManagementCard safety check: Forcing check for all cards played");
+                                    if (latestGame.mission?.team && latestGame.mission?.cardsPlayed) {
+                                        const updatedGame = { ...latestGame };
+                                        await this.checkIfAllCardsPlayed(updatedGame, latestGame.mission.cardsPlayed);
+                                    }
                                 }
-                            }
-                        }, 1000);
-                    }
+                            }, 1000);
+                        }
+                    }, missionDelay);
                 }
             }
-        }, 500);
+        }, delay);
     }
 
     // Function to skip drawing a management card
@@ -1345,6 +1524,12 @@ export class GameService {
             gameLog: [...(game.gameLog || []), gameLogEntry]
         }, true);
 
+        // Determine if this is a human player or AI
+        const isHumanPlayer = !currentUserId.startsWith(gameId + '-AI-');
+
+        // Use a longer delay for human players to ensure they can see what happened
+        const delay = isHumanPlayer ? 3000 : 500;
+
         // Give AI players a chance to play their management cards
         setTimeout(async () => {
             await this.aiPlayManagementCard();
@@ -1359,26 +1544,33 @@ export class GameService {
 
                 if (aiPlayersOnMission.length > 0) {
                     console.log(`skipManagementCard: Triggering ${aiPlayersOnMission.length} AI players to submit mission cards`);
-                    await this.submitAllAIMissionCards(aiPlayersOnMission);
 
-                    // If all players on the mission are AI, add an additional safety check
-                    if (aiPlayersOnMission.length === currentGame.mission.team.length) {
-                        console.log("skipManagementCard: All players on mission are AI, adding additional safety check");
-                        // Add a short timeout to ensure the game state has been updated
-                        setTimeout(async () => {
-                            const latestGame = this.currentGame();
-                            if (latestGame && latestGame.status === 'mission') {
-                                console.log("skipManagementCard safety check: Forcing check for all cards played");
-                                if (latestGame.mission?.team && latestGame.mission?.cardsPlayed) {
-                                    const updatedGame = { ...latestGame };
-                                    await this.checkIfAllCardsPlayed(updatedGame, latestGame.mission.cardsPlayed);
+                    // If all players on the mission are AI but a human player skipped the card,
+                    // add an extra delay to ensure the human player can see what happened
+                    const missionDelay = (isHumanPlayer && aiPlayersOnMission.length === currentGame.mission.team.length) ? 2000 : 500;
+
+                    setTimeout(async () => {
+                        await this.submitAllAIMissionCards(aiPlayersOnMission);
+
+                        // If all players on the mission are AI, add an additional safety check
+                        if (aiPlayersOnMission.length === currentGame.mission?.team.length) {
+                            console.log("skipManagementCard: All players on mission are AI, adding additional safety check");
+                            // Add a short timeout to ensure the game state has been updated
+                            setTimeout(async () => {
+                                const latestGame = this.currentGame();
+                                if (latestGame && latestGame.status === 'mission') {
+                                    console.log("skipManagementCard safety check: Forcing check for all cards played");
+                                    if (latestGame.mission?.team && latestGame.mission?.cardsPlayed) {
+                                        const updatedGame = { ...latestGame };
+                                        await this.checkIfAllCardsPlayed(updatedGame, latestGame.mission.cardsPlayed);
+                                    }
                                 }
-                            }
-                        }, 1000);
-                    }
+                            }, 1000);
+                        }
+                    }, missionDelay);
                 }
             }
-        }, 500);
+        }, delay);
     }
 
     // Function to handle AI players in the loyalty reveal state
@@ -1424,6 +1616,55 @@ export class GameService {
 
         // Reveal loyalty to the selected player
         await this.revealLoyaltyToPlayer(targetPlayerId);
+    }
+
+    // Function to handle AI players in the scope creep state
+    async aiHandleScopeCreep(): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+
+        if (!gameId || !game) {
+            return; // No active game
+        }
+
+        // Check if we're in the scopeCreep phase
+        if (game.status !== 'scopeCreep') {
+            return; // Not in scope creep phase
+        }
+
+        // Get the player who played the Scope Creep card
+        const scopeCreepPlayerId = game.scopeCreepPlayerId;
+        if (!scopeCreepPlayerId) {
+            return; // No player played the Scope Creep card
+        }
+
+        // Check if the scope creep player is an AI
+        if (!scopeCreepPlayerId.startsWith(gameId + '-AI-')) {
+            return; // Not an AI player
+        }
+
+        // Get the scope creep player
+        const scopeCreepPlayer = game.players[scopeCreepPlayerId];
+        if (!scopeCreepPlayer) {
+            return; // Scope creep player not found
+        }
+
+        // Get the current mission team
+        const currentTeam = game.mission?.team || [];
+
+        // Get all players not on the current mission team
+        const availablePlayers = Object.keys(game.players).filter(id => !currentTeam.includes(id));
+
+        if (availablePlayers.length === 0) {
+            return; // No available players to add to the team
+        }
+
+        // Randomly select a player to add to the team
+        const randomIndex = Math.floor(Math.random() * availablePlayers.length);
+        const selectedPlayerId = availablePlayers[randomIndex];
+
+        // Submit the selected player
+        await this.submitScopeCreepTeam(selectedPlayerId, scopeCreepPlayerId);
     }
 
     // Function to reveal loyalty to a selected player
@@ -1491,6 +1732,97 @@ export class GameService {
             revealedLoyalties: revealedLoyalties,
             gameLog: [...(game.gameLog || []), gameLogEntry]
         }, true);
+    }
+
+    // Function to inspect a player's card (Security Audit card effect)
+    async inspectPlayerCard(targetPlayerId: string): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = this.authService.userId();
+
+        if (!gameId || !game || !currentUserId) {
+            throw new Error("Game or user not available.");
+        }
+
+        // Check if we're in the security audit phase
+        if (game.status !== 'securityAudit' || !game.securityAuditPhase || game.securityAuditPlayerId !== currentUserId) {
+            throw new Error("Not in security audit phase or not the player who played the Security Audit card.");
+        }
+
+        // Check if the target player is on the mission team
+        if (!game.mission?.team.includes(targetPlayerId)) {
+            throw new Error("Target player is not on the mission team.");
+        }
+
+        // Check if the target player has played a card
+        if (!game.mission.cardsPlayed?.[targetPlayerId]) {
+            throw new Error("Target player has not played a card yet.");
+        }
+
+        // Get the target player's card
+        const targetCard = game.mission.cardsPlayed[targetPlayerId];
+
+        // Create a game log entry (only visible to the player who played the Security Audit card)
+        const gameLogEntry = {
+            timestamp: Timestamp.now(),
+            message: `You inspected ${game.players[targetPlayerId].name}'s Pull Request review selection and found they played: ${targetCard === 'approve' ? 'APPROVE' : 'REQUEST CHANGES'}.`
+        };
+
+        // Return to the previous game state
+        const previousStatus = game.previousStatus || 'mission';
+
+        // Update the game
+        await this.firestoreService.updateDocument('games', gameId, {
+            status: previousStatus,
+            securityAuditPhase: false,
+            securityAuditPlayerId: null,
+            securityAuditTargetId: targetPlayerId,
+            securityAuditResult: targetCard,
+            gameLog: [...(game.gameLog || []), gameLogEntry]
+        }, true);
+    }
+
+    // Function to handle AI security audit
+    async aiHandleSecurityAudit(): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+
+        if (!gameId || !game) {
+            return;
+        }
+
+        // Check if we're in the security audit phase
+        if (game.status !== 'securityAudit' || !game.securityAuditPhase) {
+            return;
+        }
+
+        // Get the AI player ID
+        const aiPlayerId = game.securityAuditPlayerId;
+        if (!aiPlayerId || !aiPlayerId.startsWith(gameId + '-AI-')) {
+            return;
+        }
+
+        // Get the mission team
+        const missionTeam = game.mission?.team || [];
+        if (missionTeam.length === 0) {
+            return;
+        }
+
+        // Filter out players who haven't played a card yet
+        const playersWithCards = missionTeam.filter(playerId =>
+            game.mission?.cardsPlayed?.[playerId] !== undefined
+        );
+
+        if (playersWithCards.length === 0) {
+            return;
+        }
+
+        // Randomly select a player to inspect
+        const randomIndex = Math.floor(Math.random() * playersWithCards.length);
+        const targetPlayerId = playersWithCards[randomIndex];
+
+        // Inspect the player's card
+        await this.inspectPlayerCard(targetPlayerId);
     }
 
     // Function to play a management card
@@ -1584,7 +1916,8 @@ export class GameService {
 
             // Get the required team size for the next story
             const playerIds = Object.keys(game.players);
-            const requiredTeamSize = this.getRequiredTeamSize(playerIds.length, nextStory);
+            const addExtraMember = game.rushJobTechDebtNextStoryAdditionalMember && nextStory === game.rushJobTechDebtNextStory;
+            const requiredTeamSize = this.getRequiredTeamSize(playerIds.length, nextStory, addExtraMember);
 
             // Get the current mission team if available
             const currentMissionTeam = game.mission?.team || [];
@@ -1670,6 +2003,147 @@ export class GameService {
                     timestamp: Timestamp.now()
                 }
             };
+        } else if (cardInfo.name === 'Scope Creep!') {
+            // "Scope Creep!" card effect:
+            // Add an additional person to the development team
+
+            // Save the current game status to return to after the Scope Creep effect is resolved
+            const previousStatus = game.status;
+
+            // Get the current mission team if available
+            const currentMissionTeam = game.mission?.team || [];
+
+            // Add log entry for the Scope Creep card
+            gameLogEntry.message += ` ${player.name} can now add an additional person to the development team.`;
+
+            // Update the game state to transition to the scopeCreep phase
+            additionalUpdates = {
+                status: 'scopeCreep',
+                scopeCreepPlayerId: currentUserId,
+                previousStatus: previousStatus, // Store the previous status to return to after the Scope Creep effect is resolved
+                teamProposal: {
+                    numToSelect: 1, // Only one additional person can be added
+                    selectedPlayers: [] // Start with no selected players
+                }
+            };
+
+            // If this is an AI player, handle the Scope Creep automatically after a short delay
+            if (currentUserId.startsWith(gameId + '-AI-')) {
+                setTimeout(() => {
+                    this.aiHandleScopeCreep();
+                }, 1000);
+            }
+        } else if (cardInfo.name === 'Security Audit!') {
+            // "Security Audit!" card effect:
+            // Secretly inspect a player's Pull Request review selection
+
+            // Save the current game status to return to after the Security Audit effect is resolved
+            const previousStatus = game.status;
+
+            // Add log entry for the Security Audit card
+            gameLogEntry.message += ` ${player.name} can now select a player to inspect their Pull Request review selection.`;
+
+            // Update the game state to transition to the securityAudit phase
+            additionalUpdates = {
+                status: 'securityAudit',
+                securityAuditPlayerId: currentUserId,
+                securityAuditPhase: true,
+                previousStatus: previousStatus // Store the previous status to return to after the Security Audit effect is resolved
+            };
+
+            // If this is an AI player, handle the Security Audit automatically after a short delay
+            if (currentUserId.startsWith(gameId + '-AI-')) {
+                setTimeout(() => {
+                    this.aiHandleSecurityAudit();
+                }, 1000);
+            }
+        } else if (cardInfo.name === 'Service Reassignment!') {
+            // "Service Reassignment!" card effect:
+            // Exchange a player on the development team with a player not on the team
+
+            // Save the current game status to return to after the Service Reassignment effect is resolved
+            const previousStatus = game.status;
+
+            // Get the current mission team if available
+            const currentMissionTeam = game.mission?.team || [];
+
+            // Add log entry for the Service Reassignment card
+            gameLogEntry.message += ` ${player.name} can now exchange a player on the development team with a player not on the team.`;
+
+            // Update the game state to transition to the serviceReassignment phase
+            additionalUpdates = {
+                status: 'serviceReassignment',
+                serviceReassignmentPlayerId: currentUserId,
+                serviceReassignmentPhase: true,
+                previousStatus: previousStatus, // Store the previous status to return to after the Service Reassignment effect is resolved
+                teamProposal: {
+                    numToSelect: 1, // Only one player can be exchanged
+                    selectedPlayers: [] // Start with no selected players
+                }
+            };
+
+            // If this is an AI player, handle the Service Reassignment automatically after a short delay
+            if (currentUserId.startsWith(gameId + '-AI-')) {
+                // AI logic for Service Reassignment would go here
+                // For now, we'll just have the AI randomly select a player to remove and a player to add
+                setTimeout(async () => {
+                    // Get the current mission team
+                    const currentGame = await this.firestoreService.getDocument<Game>('games', gameId, true);
+                    if (!currentGame) return;
+
+                    const missionTeam = currentGame.mission?.team || [];
+                    if (missionTeam.length === 0) {
+                        // No team to modify, just return to the previous status
+                        await this.firestoreService.updateDocument('games', gameId, {
+                            status: previousStatus,
+                            serviceReassignmentPlayerId: null,
+                            serviceReassignmentPhase: false
+                        }, true);
+                        return;
+                    }
+
+                    // Get all players not on the team
+                    const allPlayerIds = Object.keys(currentGame.players);
+                    const playersNotOnTeam = allPlayerIds.filter(id => !missionTeam.includes(id));
+
+                    if (playersNotOnTeam.length === 0) {
+                        // No players to add, just return to the previous status
+                        await this.firestoreService.updateDocument('games', gameId, {
+                            status: previousStatus,
+                            serviceReassignmentPlayerId: null,
+                            serviceReassignmentPhase: false
+                        }, true);
+                        return;
+                    }
+
+                    // Randomly select a player to remove from the team
+                    const randomTeamIndex = Math.floor(Math.random() * missionTeam.length);
+                    const playerToRemove = missionTeam[randomTeamIndex];
+
+                    // Randomly select a player to add to the team
+                    const randomNotOnTeamIndex = Math.floor(Math.random() * playersNotOnTeam.length);
+                    const playerToAdd = playersNotOnTeam[randomNotOnTeamIndex];
+
+                    // Create the new team
+                    const newTeam = [...missionTeam];
+                    newTeam.splice(randomTeamIndex, 1, playerToAdd); // Replace the removed player with the added player
+
+                    // Update the game
+                    await this.firestoreService.updateDocument('games', gameId, {
+                        status: previousStatus,
+                        serviceReassignmentPlayerId: null,
+                        serviceReassignmentPhase: false,
+                        mission: {
+                            ...currentGame.mission,
+                            team: newTeam
+                        },
+                        gameLog: [...(currentGame.gameLog || []), {
+                            timestamp: new Date(),
+                            message: `${player.name} exchanged ${currentGame.players[playerToRemove].name} with ${currentGame.players[playerToAdd].name} on the development team.`
+                        }]
+                    }, true);
+                }, 1000);
+            }
         } else if (cardInfo.name === 'The Real Boss!') {
             // "The Real Boss!" card effect:
             // Take another player's management card or draw two cards from the management deck, keeping one
@@ -1748,6 +2222,306 @@ export class GameService {
                     }, true);
                 }, 1000);
             }
+        } else if (cardInfo.name === 'Foam Dart Assault!') {
+            // "Foam Dart Assault!" card effect:
+            // Redo a past User Story with its original team less one person of your choice
+
+            // Save the current game status to return to after the Foam Dart Assault effect is resolved
+            const previousStatus = game.status;
+
+            // Check if three User Stories have merged or closed
+            const completedStories = (game.storyResults || []).filter(result => result !== null).length;
+            if (completedStories >= 3) {
+                throw new Error("It is too late to play this card. Three or more User Stories have already merged or closed.");
+            }
+
+            // Check if there are any completed stories to redo
+            if (!game.missionHistory || Object.keys(game.missionHistory).length === 0) {
+                throw new Error("There are no completed User Stories to redo.");
+            }
+
+            // Add log entry for the Foam Dart Assault card
+            gameLogEntry.message += ` ${player.name} can now select a past User Story to redo with its original team less one person.`;
+
+            // Update the game state to transition to the foamDartAssault phase
+            additionalUpdates = {
+                status: 'foamDartAssault',
+                foamDartAssaultPlayerId: currentUserId,
+                foamDartAssaultPhase: true,
+                previousStatus: previousStatus // Store the previous status to return to after the Foam Dart Assault effect is resolved
+            };
+
+            // If this is an AI player, handle the Foam Dart Assault automatically after a short delay
+            if (currentUserId.startsWith(gameId + '-AI-')) {
+                // AI logic for Foam Dart Assault would go here
+                // For now, we'll just have the AI randomly select a story to redo and a player to remove
+                setTimeout(async () => {
+                    // Get the current game state
+                    const currentGame = await this.firestoreService.getDocument<Game>('games', gameId, true);
+                    if (!currentGame || !currentGame.missionHistory) return;
+
+                    // Get the completed stories
+                    const completedStoryIndices = Object.keys(currentGame.missionHistory).map(Number);
+                    if (completedStoryIndices.length === 0) {
+                        // No stories to redo, just return to the previous status
+                        await this.firestoreService.updateDocument('games', gameId, {
+                            status: previousStatus,
+                            foamDartAssaultPlayerId: null,
+                            foamDartAssaultPhase: false
+                        }, true);
+                        return;
+                    }
+
+                    // Randomly select a story to redo
+                    const randomStoryIndex = Math.floor(Math.random() * completedStoryIndices.length);
+                    const storyToRedo = completedStoryIndices[randomStoryIndex];
+
+                    // Get the original team for the selected story
+                    const originalTeam = currentGame.missionHistory[storyToRedo].team;
+                    if (!originalTeam || originalTeam.length === 0) {
+                        // No team for this story, just return to the previous status
+                        await this.firestoreService.updateDocument('games', gameId, {
+                            status: previousStatus,
+                            foamDartAssaultPlayerId: null,
+                            foamDartAssaultPhase: false
+                        }, true);
+                        return;
+                    }
+
+                    // Randomly select a player to remove from the team
+                    const randomPlayerIndex = Math.floor(Math.random() * originalTeam.length);
+                    const playerToRemove = originalTeam[randomPlayerIndex];
+
+                    // Create the new team (original team less one person)
+                    const newTeam = [...originalTeam];
+                    newTeam.splice(randomPlayerIndex, 1);
+
+                    // Update the game to redo the selected story with the new team
+                    await this.firestoreService.updateDocument('games', gameId, {
+                        status: 'mission',
+                        foamDartAssaultPlayerId: null,
+                        foamDartAssaultPhase: false,
+                        currentStoryNum: storyToRedo,
+                        mission: {
+                            team: newTeam,
+                            cardsPlayed: {}
+                        },
+                        gameLog: [...(currentGame.gameLog || []), {
+                            timestamp: new Date(),
+                            message: `${player.name} is redoing User Story ${storyToRedo} with its original team less ${currentGame.players[playerToRemove].name}.`
+                        }]
+                    }, true);
+                }, 1000);
+            }
+        } else if (cardInfo.name === 'Rush Job, Tech Debt!') {
+            // "Rush Job, Tech Debt!" card effect:
+            // 1. All Sinister spies must request changes on the User Story
+            // 2. The result is a merge no matter what
+            // 3. The next User Story has one additional team member
+
+            // Add log entry for the Rush Job, Tech Debt! card
+            gameLogEntry.message += ` All Sinister spies must request changes on the User Story. The result is a merge no matter what. The next User Story will have one additional team member.`;
+
+            // Get the current mission team if available
+            const currentMissionTeam = game.mission?.team || [];
+
+            // Get the current story number
+            const currentStory = game.currentStoryNum || 1;
+
+            // Calculate the next story number
+            const nextStory = currentStory + 1;
+
+            // Check if we're on the last story
+            if (nextStory > 5) {
+                throw new Error("Cannot add an additional team member beyond the 5th User Story.");
+            }
+
+            // Update the game state to enforce the card's effects
+            additionalUpdates = {
+                // Flag to indicate that all Sinister spies must request changes
+                // This will be checked in the checkIfAllCardsPlayed function
+                rushJobTechDebt: true,
+
+                // Flag to indicate that the result is a merge no matter what
+                // This will be checked in the checkIfAllCardsPlayed function
+                rushJobTechDebtMerge: true,
+
+                // Store the next story number to add an additional team member
+                rushJobTechDebtNextStory: nextStory
+            };
+        } else if (cardInfo.name === 'Creative Differences!') {
+            // "Creative Differences!" card effect:
+            // 1. Nullify an agreed upon team
+            // 2. Pass the Technical Owner token to the next player
+            // 3. Any played management cards remain in effect
+
+            // Get the current mission team if available
+            const currentMissionTeam = game.mission?.team || [];
+
+            // Add log entry for the Creative Differences! card
+            gameLogEntry.message += ` The agreed upon team has been nullified, and the Technical Owner token has been passed to the next player.`;
+
+            // Find the next player in the player order to be the new Technical Owner
+            const playerOrder = game.playerOrder || [];
+            const currentTOIndex = playerOrder.indexOf(game.currentTO_id || '');
+            const nextTOIndex = (currentTOIndex + 1) % playerOrder.length;
+            const nextTO_id = playerOrder[nextTOIndex];
+            const nextTO = game.players[nextTO_id];
+
+            // Add log entry for the new Technical Owner
+            gameLogEntry.message += ` ${nextTO.name} is now the Technical Owner.`;
+
+            // Update the game state to nullify the team and pass the Technical Owner token
+            additionalUpdates = {
+                currentTO_id: nextTO_id,
+                mission: {
+                    team: [], // Nullify the team
+                    cardsPlayed: {} // Clear any cards played
+                },
+                teamVote: null // Clear any team votes
+            };
+        } else if (cardInfo.name === 'It\'s Show Time!') {
+            // "It's Show Time!" card effect:
+            // The Technical Owner adds two people to the User Story
+            // Shuffle the team's reviews and reveal the top three cards to determine the story's result
+            // Other cards remain unrevealed
+
+            // Get the current mission team if available
+            const currentMissionTeam = game.mission?.team || [];
+
+            // Check if there's a team to modify
+            if (currentMissionTeam.length === 0) {
+                throw new Error("There is no team to modify for the User Story.");
+            }
+
+            // Save the current game status to return to after the It's Show Time! effect is resolved
+            const previousStatus = game.status;
+
+            // Add log entry for the It's Show Time! card
+            gameLogEntry.message += ` The Technical Owner can now add two people to the User Story. The team's reviews will be shuffled and the top three cards will determine the story's result.`;
+
+            // Update the game state to transition to the itsShowTime phase
+            additionalUpdates = {
+                status: 'itsShowTime',
+                itsShowTimePlayerId: currentUserId,
+                itsShowTimePhase: true,
+                previousStatus: previousStatus, // Store the previous status to return to after the effect is resolved
+                teamProposal: {
+                    numToSelect: 2, // Two additional people can be added
+                    selectedPlayers: [] // Start with no selected players
+                }
+            };
+
+            // If this is an AI player, handle the It's Show Time! automatically after a short delay
+            if (currentUserId.startsWith(gameId + '-AI-')) {
+                // AI logic for It's Show Time! would go here
+                // For now, we'll just have the AI randomly select two players to add
+                setTimeout(async () => {
+                    // Get the current game state
+                    const currentGame = await this.firestoreService.getDocument<Game>('games', gameId, true);
+                    if (!currentGame) return;
+
+                    const missionTeam = currentGame.mission?.team || [];
+
+                    // Get all players not on the team
+                    const allPlayerIds = Object.keys(currentGame.players);
+                    const playersNotOnTeam = allPlayerIds.filter(id => !missionTeam.includes(id));
+
+                    // If there are fewer than 2 players not on the team, just add as many as possible
+                    const numToAdd = Math.min(2, playersNotOnTeam.length);
+
+                    if (numToAdd === 0) {
+                        // No players to add, just proceed to shuffling and revealing
+                        this.processItsShowTimeResults(gameId, currentGame);
+                        return;
+                    }
+
+                    // Randomly select players to add
+                    const playersToAdd = [];
+                    const availablePlayers = [...playersNotOnTeam];
+                    for (let i = 0; i < numToAdd; i++) {
+                        const randomIndex = Math.floor(Math.random() * availablePlayers.length);
+                        playersToAdd.push(availablePlayers[randomIndex]);
+                        availablePlayers.splice(randomIndex, 1);
+                    }
+
+                    // Create the new team
+                    const newTeam = [...missionTeam, ...playersToAdd];
+
+                    // Update the game with the new team
+                    await this.firestoreService.updateDocument('games', gameId, {
+                        mission: {
+                            ...currentGame.mission,
+                            team: newTeam
+                        },
+                        itsShowTimePlayersToAdd: playersToAdd
+                    }, true);
+
+                    // Process the shuffling and revealing of cards
+                    this.processItsShowTimeResults(gameId, {
+                      ...currentGame,
+                      mission: {
+                        ...currentGame.mission,
+                        cardsPlayed: currentGame.mission!.cardsPlayed,
+                        team: newTeam
+                      }
+                    });
+                }, 1000);
+            }
+        } else if (cardInfo.name === 'All Hands!') {
+            // "All Hands!" card effect:
+            // The Technical Owner adds players to the development team until it is the same size as the Dexter squad
+            // If the Sales Rep is played, this card must be played
+
+            // TODO: Add functionality to enforce that this card must be played if the Sales Rep card is played.
+            // This would involve:
+            // 1. Checking if the "Rush Job, Tech Debt!" (Sales Rep) card has been played
+            // 2. Checking if any player has the "All Hands!" (COO) card
+            // 3. Forcing that player to play the "All Hands!" card
+
+            // Get the current mission team if available
+            const currentMissionTeam = game.mission?.team || [];
+
+            // Count the number of Dexter squad members
+            let dexterSquadSize = 0;
+            for (const playerId in game.players) {
+                const playerRole = game.roles?.[playerId];
+                if (playerRole) {
+                    // Check if the player is part of the Dexter squad
+                    const isDexter = playerRole.includes('Dexter') || playerRole === 'Duke' || playerRole === 'SupportManager';
+                    if (isDexter) {
+                        dexterSquadSize++;
+                    }
+                }
+            }
+
+            // Calculate how many players need to be added to the team
+            const currentTeamSize = currentMissionTeam.length;
+            const playersToAdd = Math.max(0, dexterSquadSize - currentTeamSize);
+
+            // Add log entry for the All Hands! card
+            if (playersToAdd > 0) {
+                gameLogEntry.message += ` The Technical Owner needs to add ${playersToAdd} player(s) to the development team to match the Dexter squad size of ${dexterSquadSize}.`;
+            } else {
+                gameLogEntry.message += ` The development team already matches or exceeds the Dexter squad size of ${dexterSquadSize}.`;
+            }
+
+            // Save the current game status to return to after the All Hands! effect is resolved
+            const previousStatus = game.status;
+
+            // Update the game state to transition to a phase where the Technical Owner can add players
+            if (playersToAdd > 0) {
+                additionalUpdates = {
+                    status: 'scopeCreep', // Reuse the scopeCreep phase for adding players
+                    scopeCreepPlayerId: game.currentTO_id, // The Technical Owner will add the players
+                    previousStatus: previousStatus, // Store the previous status to return to after the effect is resolved
+                    teamProposal: {
+                        numToSelect: playersToAdd, // Number of players to add
+                        selectedPlayers: [] // Start with no selected players
+                    },
+                    allHandsPlayed: true // Flag to indicate that the All Hands! card was played
+                };
+            }
         }
 
         // Update the game
@@ -1797,6 +2571,84 @@ export class GameService {
     }
 
     // Function for AI to play a management card
+    // Function to process the It's Show Time! card results
+    async processItsShowTimeResults(gameId: string, game: Game): Promise<void> {
+        if (!gameId || !game) {
+            throw new Error("Game not available.");
+        }
+
+        // Get the current mission team
+        const missionTeam = game.mission?.team || [];
+        if (missionTeam.length === 0) {
+            throw new Error("There is no team for the User Story.");
+        }
+
+        // Generate random reviews for each team member (approve or request changes)
+        const reviews: ('approve' | 'request')[] = [];
+        for (let i = 0; i < missionTeam.length; i++) {
+            // Randomly determine if the player will approve or request changes
+            const willApprove = Math.random() > 0.5;
+            reviews.push(willApprove ? 'approve' : 'request');
+        }
+
+        // Shuffle the reviews
+        const shuffledReviews = this.shuffleArray([...reviews]);
+
+        // Reveal only the top three cards
+        const revealedReviews = shuffledReviews.slice(0, 3);
+
+        // Count the number of "request changes" cards in the revealed reviews
+        const requestChangesCount = revealedReviews.filter(review => review === 'request').length;
+
+        // Determine the story result based on the revealed reviews
+        const storyResult = requestChangesCount >= 2 ? 'sinister' : 'dexter';
+
+        // Get the current story number
+        const currentStory = game.currentStoryNum || 1;
+
+        // Update the story results
+        const storyResults = [...(game.storyResults || [])];
+        while (storyResults.length < currentStory) {
+            storyResults.push(null);
+        }
+        storyResults[currentStory - 1] = storyResult;
+
+        // Update the completed mission teams
+        const completedMissionTeams = { ...(game.completedMissionTeams || {}) };
+        completedMissionTeams[currentStory] = missionTeam;
+
+        // Update the mission history
+        const missionHistory = { ...(game.missionHistory || {}) };
+        missionHistory[currentStory] = {
+            team: missionTeam,
+            acceptedTeamProposedBy: game.currentTO_id || '',
+            requestChangesCount: requestChangesCount
+        };
+
+        // Add a log entry
+        const gameLogEntry = {
+            timestamp: new Date(),
+            message: `The team's reviews were shuffled and the top three cards were revealed. The story result is ${storyResult === 'dexter' ? 'merged' : 'closed with changes requested'}.`
+        };
+
+        // Update the game state
+        await this.firestoreService.updateDocument('games', gameId, {
+            status: 'results', // Move to the results phase
+            storyResults: storyResults,
+            completedMissionTeams: completedMissionTeams,
+            missionHistory: missionHistory,
+            itsShowTimePhase: false,
+            itsShowTimePlayerId: null,
+            itsShowTimeShuffledReviews: shuffledReviews,
+            itsShowTimeRevealedReviews: revealedReviews,
+            gameLog: [...(game.gameLog || []), gameLogEntry],
+            mission: {
+                team: missionTeam,
+                cardsPlayed: {} // Clear any cards played
+            }
+        }, true);
+    }
+
     async aiPlayManagementCardForPlayer(aiPlayerId: string): Promise<void> {
         console.log(`aiPlayManagementCardForPlayer: Starting for AI player ${aiPlayerId}`);
         const gameId = this.activeGameId();
@@ -2015,6 +2867,15 @@ export class GameService {
              return; // Or throw an error if preferred
         }
 
+        // Check if the player has the Janitor card and is on the 5th User Story
+        const player = game.players[currentUserId];
+        const currentStory = game.currentStoryNum || 1;
+        if (player && player.managementCard === 'janitor' && currentStory === 5 && card === 'request') {
+            console.log("submitMissionCard: Player has Janitor card and is on the 5th User Story, forcing approve card");
+            // Force the player to approve changes on the 5th User Story
+            card = 'approve';
+        }
+
         // 3. Record the current user's card\n
         const updatedCardsPlayed = { ...game.mission?.cardsPlayed, [currentUserId]: card };
         console.log("submitMissionCard: Updated cards played", updatedCardsPlayed);
@@ -2099,6 +2960,13 @@ export class GameService {
                 }
             }
 
+            // Check if the Rush Job, Tech Debt! card was played
+            // If so, the result is a merge no matter what
+            if (latestGame.rushJobTechDebtMerge) {
+                missionResult = 'dexter';
+                console.log("checkIfAllCardsPlayed: Rush Job, Tech Debt! card was played, so the result is a merge no matter what");
+            }
+
             // Update the story results
             const storyResults = [...(latestGame.storyResults || [])];
             const currentStoryIndex = (latestGame.currentStoryNum || 1) - 1;
@@ -2148,8 +3016,27 @@ export class GameService {
             let nextStatus: Game['status'] = 'results';
             let winner: 'dexter' | 'sinister' | undefined = undefined;
 
+            // Check for Janitor card win condition: Sinister wins on the 4th User Story or earlier
+            const currentStory = latestGame.currentStoryNum || 1;
+            let janitorWin = false;
+
+            if (missionResult === 'sinister' && currentStory <= 4) {
+                // Check if any player has the Janitor card
+                for (const playerId in latestGame.players) {
+                    const player = latestGame.players[playerId];
+                    if (player.managementCard === 'janitor') {
+                        janitorWin = true;
+                        additionalLogMessage += ` Player ${player.name} with the Janitor card wins because Sinister won on the ${currentStory}${this.getOrdinalSuffix(currentStory)} User Story!`;
+                        break;
+                    }
+                }
+            }
+
             // In "The Sprint", Dexter needs 3 successful missions to win, Sinister needs 3 failed missions
-            if (dexterWins >= 3) {
+            if (janitorWin) {
+                nextStatus = 'gameOver';
+                winner = 'sinister';
+            } else if (dexterWins >= 3) {
                 nextStatus = 'gameOver';
                 winner = 'dexter';
                 additionalLogMessage += ` Dexter has won ${dexterWins} stories and wins the game!`;
@@ -2169,6 +3056,23 @@ export class GameService {
                     mission: { ...latestGame.mission, cardsPlayed: combinedCardsPlayed },
                     gameLog: [...(latestGame.gameLog || []), { timestamp: new Date(), message: additionalLogMessage }],
                 };
+
+                // Check if the Rush Job, Tech Debt! card was played
+                // If so, the next User Story has one additional team member
+                if (latestGame.rushJobTechDebtNextStory) {
+                    const nextStory = latestGame.rushJobTechDebtNextStory;
+                    // Only apply this effect if we're not on the last story
+                    if (nextStory <= 5) {
+                        console.log(`checkIfAllCardsPlayed: Rush Job, Tech Debt! card was played, so User Story ${nextStory} will have one additional team member`);
+                        // Store the next story number and the fact that it should have one additional team member
+                        updateData.rushJobTechDebtNextStoryAdditionalMember = true;
+                        // Add a log entry
+                        updateData.gameLog = [...(updateData.gameLog || []), {
+                            timestamp: new Date(),
+                            message: `Due to the Rush Job, Tech Debt! card, User Story ${nextStory} will have one additional team member.`
+                        }];
+                    }
+                }
 
                 // If a player was designated to draw a management card after mission failure
                 if (designatedPlayerId) {
@@ -2422,6 +3326,22 @@ export class GameService {
             console.error("Error deleting all games:", error);
             throw error;
         }
+    }
+
+    // Helper method to get the ordinal suffix for a number (1st, 2nd, 3rd, etc.)
+    private getOrdinalSuffix(num: number): string {
+        const j = num % 10;
+        const k = num % 100;
+        if (j === 1 && k !== 11) {
+            return 'st';
+        }
+        if (j === 2 && k !== 12) {
+            return 'nd';
+        }
+        if (j === 3 && k !== 13) {
+            return 'rd';
+        }
+        return 'th';
     }
 
     // Function to take a management card from another player (CEO card effect)

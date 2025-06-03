@@ -39,39 +39,39 @@ export const MANAGEMENT_CARDS: { [key: string]: ManagementCard } = {
     },
     'cmo': {
         id: 'cmo',
-        title: 'HR',
-        name: 'People Person',
-        instructions: 'Reveal your squad loyalty to a player of your choice. Play immediately after drawing.',
-        playablePhases: ['mission', 'teamProposal', 'teamVoting'],
-        playableStories: [1, 2, 3, 4, 5],
-        imageUrl: 'assets/management/hr.png'
+        title: 'CMO',
+        name: 'Scope Creep!',
+        instructions: 'Add an additional person to the development team. Play after a team is agreed upon during grooming for the 1st, 2nd, 3rd, or 4th User Story. May be played upon drawing before the team enters the Review Phase.',
+        playablePhases: ['mission'],
+        playableStories: [1, 2, 3, 4],
+        imageUrl: 'assets/management/cmo.png'
     },
     'coo': {
         id: 'coo',
-        title: 'PO',
-        name: 'Shifting Priorities',
-        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
+        title: 'COO',
+        name: 'All Hands!',
+        instructions: 'The Technical Owner adds players to the development team until it is the same size as the Dexter squad. If the Sales Rep is played, this card must be played. Otherwise...Play after a team is agreed upon during grooming for the 1st, 2nd, 3rd, or 4th User Story. May be played upon drawing before the team enters the Review Phase.',
         playablePhases: ['mission'],
-        playableStories: [1, 2, 3],
-        imageUrl: 'assets/management/po.png'
+        playableStories: [1, 2, 3, 4],
+        imageUrl: 'assets/management/coo.png'
     },
     'cso': {
         id: 'cso',
-        title: 'PO',
-        name: 'Shifting Priorities',
-        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
+        title: 'CSO',
+        name: 'Security Audit!',
+        instructions: 'Secretly inspect a player\'s Pull Request review selection. Choose the target after all selections are locked in. Play after a team is agreed upon during grooming for the 1st, 2nd, 3rd, or 4th User Story. May be played upon drawing before the team enters the Review Phase.',
         playablePhases: ['mission'],
-        playableStories: [1, 2, 3],
-        imageUrl: 'assets/management/po.png'
+        playableStories: [1, 2, 3, 4],
+        imageUrl: 'assets/management/cso.png'
     },
     'cto': {
         id: 'cto',
-        title: 'PO',
-        name: 'Shifting Priorities',
-        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
+        title: 'CTO',
+        name: 'Foam Dart Assault!',
+        instructions: 'Redo a past User Story with its original team less one person of your choice. Play between User Stories. If three User Stories have merged or closed, it is too late to play this card.',
         playablePhases: ['mission'],
-        playableStories: [1, 2, 3],
-        imageUrl: 'assets/management/po.png'
+        playableStories: [1, 2, 3, 4, 5],
+        imageUrl: 'assets/management/cto.png'
     },
     'hr': {
         id: 'hr',
@@ -84,56 +84,47 @@ export const MANAGEMENT_CARDS: { [key: string]: ManagementCard } = {
     },
     'janitor': {
         id: 'janitor',
-        title: 'PO',
-        name: 'Shifting Priorities',
-        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
-        playablePhases: ['mission'],
-        playableStories: [1, 2, 3],
-        imageUrl: 'assets/management/po.png'
+        title: 'Janitor',
+        name: 'You Are a Spy!',
+        instructions: 'For as long as you possess this card, you are Sinister. You may request changes, and you win if Sinister wins on the 4th User Story or earlier. On the 5th User Story, you must approve changes. A Dexter Janitor cannot win via game end sniping. Effect occurs immediately, but keep the card concealed as if unplayed.',
+        playablePhases: ['mission', 'teamProposal', 'teamVoting'],
+        playableStories: [1, 2, 3, 4, 5],
+        imageUrl: 'assets/management/janitor.png'
     },
     'joe': {
         id: 'joe',
-        title: 'PO',
-        name: 'Shifting Priorities',
-        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
+        title: 'VP R&D',
+        name: 'Service Reassignment!',
+        instructions: 'Exchange a player on the development team with a player not on the team. Play after a team is agreed upon during grooming for the 1st, 2nd, 3rd, or 4th User Story. May be played upon drawing before the team enters the Review Phase.',
         playablePhases: ['mission'],
-        playableStories: [1, 2, 3],
-        imageUrl: 'assets/management/po.png'
-    },
-    'mat': {
-        id: 'mat',
-        title: 'PO',
-        name: 'Shifting Priorities',
-        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
-        playablePhases: ['mission'],
-        playableStories: [1, 2, 3],
-        imageUrl: 'assets/management/po.png'
+        playableStories: [1, 2, 3, 4],
+        imageUrl: 'assets/management/joe.png'
     },
     'salesrep': {
         id: 'salesrep',
-        title: 'PO',
-        name: 'Shifting Priorities',
-        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
+        title: 'Sales Rep',
+        name: 'Rush Job, Tech Debt!',
+        instructions: 'All Sinister spies must request changes on the User Story. The result is a merge no matter what. The next User Story has one additional team member. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
         playablePhases: ['mission'],
         playableStories: [1, 2, 3],
-        imageUrl: 'assets/management/po.png'
+        imageUrl: 'assets/management/salesrep.png'
     },
     'sme': {
         id: 'sme',
-        title: 'PO',
-        name: 'Shifting Priorities',
-        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
+        title: 'SME',
+        name: 'Creative Differences!',
+        instructions: 'Nullify an agreed upon team. Pass the Technical Owner token to the next player. Any played management cards remain in effect. Play after a team is agreed upon during grooming for the 1st, 2nd, 3rd, or 4th User Story. May be played upon drawing before the team enters the Review Phase.',
         playablePhases: ['mission'],
-        playableStories: [1, 2, 3],
-        imageUrl: 'assets/management/po.png'
+        playableStories: [1, 2, 3, 4],
+        imageUrl: 'assets/management/sme.png'
     },
     'vpsales': {
         id: 'vpsales',
-        title: 'PO',
-        name: 'Shifting Priorities',
-        instructions: 'Switch to the next User Story; the Technical Owner adds or removes players to the team to match the story requirement. Play after a team is agreed upon during grooming for the 1st, 2nd, or 3rd User Story. May be played upon drawing before the team enters the Review Phase.',
+        title: 'VP Sales',
+        name: 'It\'s Show Time!',
+        instructions: 'The Technical Owner adds two people to the User Story. Shuffle the team\'s reviews and reveal the top three cards to determine the story\'s result. Other cards remain unrevealed. Play after a team is agreed upon during grooming for the 1st, 2nd, 3rd, or 4th User Story. May be played upon drawing before the team enters the Review Phase.',
         playablePhases: ['mission'],
-        playableStories: [1, 2, 3],
-        imageUrl: 'assets/management/po.png'
+        playableStories: [1, 2, 3, 4],
+        imageUrl: 'assets/management/vpsales.png'
     }
 };

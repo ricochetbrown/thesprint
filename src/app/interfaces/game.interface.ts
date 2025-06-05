@@ -23,6 +23,7 @@ export interface Game {
     };
     managementDeck?: string[]; // Array of management card types
     managementDesignatedPlayer?: string; // Player ID designated to receive a management card
+    proposedManagementDesignatedPlayer?: string; // Player ID proposed to receive a management card (set during team proposal)
     managementPhase?: boolean; // Whether we're in the management phase (between Grooming and Review)
     managementCardPlayPhase?: boolean; // Whether a player has drawn a management card and now has the opportunity to play it
     playedManagementCard?: {

@@ -677,12 +677,12 @@ export class GameService {
         // Only allow management designation for stories 1-4
         currentStory = game.currentStoryNum || 1;
         if (currentStory <= 4) {
-            // If no player was designated, we'll set managementDesignatedPlayer to null
+            // If no player was designated, we'll set proposedManagementDesignatedPlayer to null
             // This allows the UI to know that the TO didn't select anyone
             const updateData: any = {
                 teamVote: { proposedTeam: teamPlayerIds, votes: {} },
                 status: 'teamVoting',
-                managementDesignatedPlayer: designatedPlayerId || null,
+                proposedManagementDesignatedPlayer: designatedPlayerId || null,
                 gameLog: [...(game.gameLog || []), {
                     timestamp: new Date(),
                     message: `${game.players[currentUserId]?.name || 'Team Leader'} proposed a team of ${team.length} for story ${game.currentStoryNum}.`
@@ -927,13 +927,13 @@ export class GameService {
                 // Set the mission team to the proposed team that was just approved
                 const missionTeam = game.teamVote?.proposedTeam || [];
 
-                // Check if there's a designated player for management card and if we're in stories 1-4
+                // Check if there's a proposed designated player for management card and if we're in stories 1-4
                 const currentStory = game.currentStoryNum || 1;
-                const hasDesignatedPlayer = !!game.managementDesignatedPlayer && currentStory <= 4;
+                const hasDesignatedPlayer = !!game.proposedManagementDesignatedPlayer && currentStory <= 4;
 
-                // If there's a designated player, set the managementPhase flag
+                // If there's a proposed designated player, set the managementPhase flag and the actual designated player
                 if (hasDesignatedPlayer) {
-                    const designatedPlayerId = game.managementDesignatedPlayer!;
+                    const designatedPlayerId = game.proposedManagementDesignatedPlayer!;
                     const isAI = designatedPlayerId.startsWith(gameId + '-AI-');
 
                     // If the designated player is an AI, proceed to mission phase
@@ -944,6 +944,8 @@ export class GameService {
                         currentTO_id: nextTOId,
                         voteFailsThisRound: nextVoteFails,
                         managementPhase: true, // Set the management phase flag
+                        managementDesignatedPlayer: designatedPlayerId, // Set the actual designated player
+                        proposedManagementDesignatedPlayer: null, // Clear the proposed designated player
                         previousStatus: isAI ? null : nextStatus, // Store the next status for human players
                         gameLog: [
                             ...(game.gameLog || []),
@@ -1061,6 +1063,7 @@ export class GameService {
                             voteFailsThisRound: nextVoteFails,
                             managementPhase: true, // Set the management phase flag
                             managementDesignatedPlayer: designatedPlayerId, // Designate the player
+                            proposedManagementDesignatedPlayer: null, // Clear the proposed designated player
                             previousStatus: isAI ? null : nextStatus, // Store the next status for human players
                             gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: additionalLogMessage }],
                             teamVote: null, // Clear the team vote data for the next round
@@ -1221,22 +1224,25 @@ export class GameService {
                 // Set the mission team to the proposed team that was just approved
                 const missionTeam = game.teamVote?.proposedTeam || [];
 
-                // Check if there's a designated player for management card and if we're in stories 1-4
+                // Check if there's a proposed designated player for management card and if we're in stories 1-4
                 const currentStory = game.currentStoryNum || 1;
-                const hasDesignatedPlayer = !!game.managementDesignatedPlayer && currentStory <= 4;
+                const hasDesignatedPlayer = !!game.proposedManagementDesignatedPlayer && currentStory <= 4;
 
-                // If there's a designated player, set the managementPhase flag
+                // If there's a proposed designated player, set the managementPhase flag and the actual designated player
                 if (hasDesignatedPlayer) {
+                    const designatedPlayerId = game.proposedManagementDesignatedPlayer!;
                     await this.firestoreService.updateDocument('games', gameId, {
                         mission: { team: missionTeam, cardsPlayed: {} },
                         status: nextStatus,
                         currentTO_id: nextTOId,
                         voteFailsThisRound: nextVoteFails,
                         managementPhase: true, // Set the management phase flag
+                        managementDesignatedPlayer: designatedPlayerId, // Set the actual designated player
+                        proposedManagementDesignatedPlayer: null, // Clear the proposed designated player
                         gameLog: [
                             ...(game.gameLog || []),
                             { timestamp: new Date(), message: additionalLogMessage },
-                            { timestamp: new Date(), message: `${game.players[game.managementDesignatedPlayer!]?.name || 'Designated player'} can now draw a management card.` }
+                            { timestamp: new Date(), message: `${game.players[designatedPlayerId]?.name || 'Designated player'} can now draw a management card.` }
                         ],
                         teamVote: null, // Clear the team vote data for the next round
                     }, true);

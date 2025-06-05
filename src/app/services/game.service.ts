@@ -1315,6 +1315,12 @@ export class GameService {
             throw new Error("You are not allowed to draw a management card at this time.");
         }
 
+        // Check if the current story is 1-4 (management cards should not be drawn in story 5)
+        const currentStory = game.currentStoryNum || 1;
+        if (currentStory > 4) {
+            throw new Error("Management cards cannot be drawn in the 5th round.");
+        }
+
         // Check if there are cards left in the deck
         if (!game.managementDeck || game.managementDeck.length === 0) {
             throw new Error("No management cards left in the deck.");
@@ -1425,6 +1431,13 @@ export class GameService {
         if (!gameId || !game || !game.managementPhase || !game.managementDesignatedPlayer) {
             console.log("aiDrawManagementCard: No active game or not in management phase");
             return; // No active game or not in management phase
+        }
+
+        // Check if the current story is 1-4 (management cards should not be drawn in story 5)
+        const currentStory = game.currentStoryNum || 1;
+        if (currentStory > 4) {
+            console.log("aiDrawManagementCard: Management cards cannot be drawn in the 5th round");
+            return; // Don't draw management cards in the 5th round
         }
 
         const designatedPlayerId = game.managementDesignatedPlayer;

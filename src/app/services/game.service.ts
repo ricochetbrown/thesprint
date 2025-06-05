@@ -959,7 +959,7 @@ export class GameService {
                     if (isAI) {
                         setTimeout(async () => {
                             await this.aiDrawManagementCard();
-                        }, 500);
+                        }, 2000); // Increased to 2 seconds to ensure the UI has time to update
                     }
                 } else {
                     await this.firestoreService.updateDocument('games', gameId, {
@@ -1073,7 +1073,7 @@ export class GameService {
                         if (isAI) {
                             setTimeout(async () => {
                                 await this.aiDrawManagementCard();
-                            }, 500);
+                            }, 2000); // Increased to 2 seconds to ensure the UI has time to update
                         }
 
                         // Return early since we've already updated the game
@@ -1250,7 +1250,7 @@ export class GameService {
                     // Check if the designated player is an AI and trigger them to draw a card
                     setTimeout(async () => {
                         await this.aiDrawManagementCard();
-                    }, 500);
+                    }, 2000); // Increased to 2 seconds to ensure the UI has time to update
                 } else {
                     await this.firestoreService.updateDocument('games', gameId, {
                         mission: { team: missionTeam, cardsPlayed: {} },
@@ -1454,13 +1454,16 @@ export class GameService {
             return; // Not an AI
         }
 
-        // AI decision logic: For now, always draw a card
-        try {
-            console.log(`aiDrawManagementCard: AI ${designatedPlayerId} drawing a card`);
-            await this.drawManagementCard(designatedPlayerId);
-        } catch (error) {
-            console.error(`aiDrawManagementCard: Error drawing card for AI ${designatedPlayerId}:`, error);
-        }
+        // Add a delay to allow the UI to update and show the guido icon on the designated player
+        console.log(`aiDrawManagementCard: Adding delay before AI ${designatedPlayerId} draws a card`);
+        setTimeout(async () => {
+            try {
+                console.log(`aiDrawManagementCard: AI ${designatedPlayerId} drawing a card after delay`);
+                await this.drawManagementCard(designatedPlayerId);
+            } catch (error) {
+                console.error(`aiDrawManagementCard: Error drawing card for AI ${designatedPlayerId}:`, error);
+            }
+        }, 2000); // 2-second delay to ensure the UI has time to update
     }
 
     // Function to skip playing a management card
@@ -3173,7 +3176,7 @@ export class GameService {
                 if (designatedPlayerId && designatedPlayerId.startsWith(gameId + '-AI-')) {
                     setTimeout(async () => {
                         await this.aiDrawManagementCard();
-                    }, 500);
+                    }, 2000); // Increased to 2 seconds to ensure the UI has time to update
                 }
 
                 // Verify the game state was updated correctly

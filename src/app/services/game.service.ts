@@ -933,24 +933,32 @@ export class GameService {
 
                 // If there's a designated player, set the managementPhase flag
                 if (hasDesignatedPlayer) {
+                    const designatedPlayerId = game.managementDesignatedPlayer!;
+                    const isAI = designatedPlayerId.startsWith(gameId + '-AI-');
+
+                    // If the designated player is an AI, proceed to mission phase
+                    // If it's a human player, stay in the current phase until they draw a card
                     await this.firestoreService.updateDocument('games', gameId, {
                         mission: { team: missionTeam, cardsPlayed: {} },
-                        status: nextStatus,
+                        status: isAI ? nextStatus : game.status, // Keep current status for human players
                         currentTO_id: nextTOId,
                         voteFailsThisRound: nextVoteFails,
                         managementPhase: true, // Set the management phase flag
+                        previousStatus: isAI ? null : nextStatus, // Store the next status for human players
                         gameLog: [
                             ...(game.gameLog || []),
                             { timestamp: new Date(), message: additionalLogMessage },
-                            { timestamp: new Date(), message: `${game.players[game.managementDesignatedPlayer!]?.name || 'Designated player'} can now draw a management card.` }
+                            { timestamp: new Date(), message: `${game.players[designatedPlayerId]?.name || 'Designated player'} can now draw a management card.` }
                         ],
                         teamVote: null, // Clear the team vote data for the next round
                     }, true);
 
                     // Check if the designated player is an AI and trigger them to draw a card
-                    setTimeout(async () => {
-                        await this.aiDrawManagementCard();
-                    }, 500);
+                    if (isAI) {
+                        setTimeout(async () => {
+                            await this.aiDrawManagementCard();
+                        }, 500);
+                    }
                 } else {
                     await this.firestoreService.updateDocument('games', gameId, {
                         mission: { team: missionTeam, cardsPlayed: {} },
@@ -1309,6 +1317,9 @@ export class GameService {
             message: `${player.name} drew a management card.`
         });
 
+        // Check if we need to restore a previous status (for human players)
+        const previousStatus = game.previousStatus;
+
         // Update the game
         await this.firestoreService.updateDocument('games', gameId, {
             players: updatedPlayers,
@@ -1316,6 +1327,8 @@ export class GameService {
             managementPhase: false, // End the management phase
             managementCardPlayPhase: true, // Set the management card play phase
             managementDesignatedPlayer: null, // Clear the designated player
+            status: previousStatus || game.status, // Restore previous status if it exists
+            previousStatus: null, // Clear the previous status
             gameLog: [...(game.gameLog || []), ...gameLogEntries]
         }, true);
 

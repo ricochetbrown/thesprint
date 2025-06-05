@@ -3060,7 +3060,7 @@ export class GameService {
             storyResults[currentStoryIndex] = missionResult;
 
             let additionalLogMessage = '';
-            let designatedPlayerId: string | null = null;
+            let designatedPlayerId: string = '';
 
             if (missionResult === 'dexter') {
                 additionalLogMessage = `Mission succeeded with ${approveCount} approve cards and ${requestCount} request cards. Dexter wins this story!`;
@@ -3070,29 +3070,6 @@ export class GameService {
                 if (latestGame.preliminaryReview && latestGame.preliminaryReview.action === 'merge' && requestCount > 0) {
                     const designatedPlayerName = latestGame.players[latestGame.preliminaryReview.designatedPlayerId]?.name || 'Unknown';
                     additionalLogMessage += ` ${designatedPlayerName} had to have requested changes on the mission since there were ${requestCount} request cards.`;
-                }
-
-                // Designate a player to draw a management card after mission failure
-                // Only for stories 1-4, similar to the logic in submitVote
-                const currentStory = latestGame.currentStoryNum || 1;
-                if (currentStory <= 4) {
-                    // Choose a player who was not on the mission team
-                    const allPlayerIds = latestGame.playerOrder || [];
-                    const nonMissionPlayers = allPlayerIds.filter(playerId => !missionTeam.includes(playerId));
-
-                    if (nonMissionPlayers.length > 0) {
-                        // Choose the first player after the current TO in the player order who wasn't on the mission
-                        const currentTOIndex = allPlayerIds.indexOf(latestGame.currentTO_id!);
-                        let designatedPlayerIndex = (currentTOIndex + 1) % allPlayerIds.length;
-
-                        // Find the first player after the TO who wasn't on the mission
-                        while (missionTeam.includes(allPlayerIds[designatedPlayerIndex])) {
-                            designatedPlayerIndex = (designatedPlayerIndex + 1) % allPlayerIds.length;
-                        }
-
-                        designatedPlayerId = allPlayerIds[designatedPlayerIndex];
-                        additionalLogMessage += ` ${latestGame.players[designatedPlayerId]?.name || 'Designated player'} can now draw a management card.`;
-                    }
                 }
             }
 
@@ -3190,7 +3167,7 @@ export class GameService {
                 console.log("checkIfAllCardsPlayed: Game state updated successfully");
 
                 // Check if the designated player is an AI and trigger them to draw a card
-                if (designatedPlayerId && designatedPlayerId.startsWith(gameId + '-AI-')) {
+                if (designatedPlayerId.startsWith(gameId + '-AI-')) {
                     setTimeout(async () => {
                         await this.aiDrawManagementCard();
                     }, 2000); // Increased to 2 seconds to ensure the UI has time to update

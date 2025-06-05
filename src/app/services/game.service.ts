@@ -1042,9 +1042,44 @@ export class GameService {
                     const nextTOIndex = (currentTOIndex + 1) % playerIds.length;
                     nextTOId = playerIds[nextTOIndex];
                     additionalLogMessage = `Team rejected with ${voteCounts.rethrow} rethrow votes and ${voteCounts.agree} agree votes. ${game.players[nextTOId]?.name || 'Next Team Leader'} is now the Team Leader.`;
+
+                    // Check if the current story is 1-4 (management cards can be drawn in these stories)
+                    const currentStory = game.currentStoryNum || 1;
+                    if (currentStory <= 4) {
+                        // Designate the next Team Leader to receive a management card
+                        const designatedPlayerId = nextTOId;
+                        const isAI = designatedPlayerId.startsWith(gameId + '-AI-');
+
+                        // Add a log message about drawing a management card
+                        const managementCardMessage = `${game.players[designatedPlayerId]?.name || 'Designated player'} can now draw a management card.`;
+                        additionalLogMessage += '\n' + managementCardMessage;
+
+                        // Update the game state to include management phase information
+                        await this.firestoreService.updateDocument('games', gameId, {
+                            status: isAI ? nextStatus : game.status, // Keep current status for human players
+                            currentTO_id: nextTOId,
+                            voteFailsThisRound: nextVoteFails,
+                            managementPhase: true, // Set the management phase flag
+                            managementDesignatedPlayer: designatedPlayerId, // Designate the player
+                            previousStatus: isAI ? null : nextStatus, // Store the next status for human players
+                            gameLog: [...(game.gameLog || []), { timestamp: new Date(), message: additionalLogMessage }],
+                            teamVote: null, // Clear the team vote data for the next round
+                        }, true);
+
+                        // Check if the designated player is an AI and trigger them to draw a card
+                        if (isAI) {
+                            setTimeout(async () => {
+                                await this.aiDrawManagementCard();
+                            }, 500);
+                        }
+
+                        // Return early since we've already updated the game
+                        return;
+                    }
                 }
             }
 
+            // Only update the game if we haven't already done so
             await this.firestoreService.updateDocument('games', gameId, {
                 status: nextStatus,
                 currentTO_id: nextTOId,

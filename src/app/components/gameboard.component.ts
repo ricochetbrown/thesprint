@@ -192,27 +192,53 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                             }
                             @case ('teamVoting') {
                                 <div>
-                                    <p class="mb-2">Team proposed by {{ game.players[game.currentTO_id!].name }}. Vote:</p>
-                                    <div class="mb-4 text-lg">
-                                        <!-- Display only the proposed team members -->
-                                        Proposed Team: <span class="font-bold">{{ getProposedTeamNames(game) }}</span>
+                                    <!-- Management Phase UI (when in teamVoting status but management phase is active) -->
+                                    @if (game.managementPhase && authService.userId() === game.managementDesignatedPlayer) {
+                                        <div class="bg-purple-800 bg-opacity-80 p-4 rounded-lg mb-4">
+                                            <h3 class="text-xl font-bold mb-2">Management Card</h3>
+                                            <p class="mb-4">You have been designated to receive a management card. Would you like to draw one?</p>
 
-                                        <!-- Voting status now displayed under each player's avatar -->
-                                        <p class="mb-2">
-                                            Votes Cast: {{ teamVoteCount() }} / {{ game.playerOrder.length }}
-                                        </p>
+                                            @if (getPlayerManagementCard(authService.userId()!, game)) {
+                                                <p class="mb-2 text-yellow-300">
+                                                    Note: You already have a {{ getPlayerManagementCard(authService.userId()!, game) }} card.
+                                                    Drawing a new card will discard your current one.
+                                                </p>
+                                            }
 
-                                        <p class="mb-4">Vote to AGREE or RETHROW.</p>
-                                        <button (click)="gameService.submitVote('agree')"
-                                                [disabled]="!!game.teamVote?.votes?.[authService.userId()!]"
-                                                class="bg-green-500 hover:bg-green-600 px-6 py-3 rounded text-lg mr-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                                                AGREE
-                                        </button>
-                                        <button (click)="gameService.submitVote('rethrow')"
-                                                [disabled]="!!game.teamVote?.votes?.[authService.userId()!]">
-                                        </button>
-                                        <button (click)="gameService.submitVote('rethrow')" class="bg-red-500 hover:bg-red-600 px-6 py-3 rounded text-lg">RETHROW</button>
-                                    </div>
+                                            <div class="flex gap-4">
+                                                <button (click)="gameService.drawManagementCard()"
+                                                        class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded">
+                                                    Draw Card
+                                                </button>
+                                                <button (click)="gameService.skipManagementCard()"
+                                                        class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded">
+                                                    Skip
+                                                </button>
+                                            </div>
+                                        </div>
+                                    } @else {
+                                        <p class="mb-2">Team proposed by {{ game.players[game.currentTO_id!].name }}. Vote:</p>
+                                        <div class="mb-4 text-lg">
+                                            <!-- Display only the proposed team members -->
+                                            Proposed Team: <span class="font-bold">{{ getProposedTeamNames(game) }}</span>
+
+                                            <!-- Voting status now displayed under each player's avatar -->
+                                            <p class="mb-2">
+                                                Votes Cast: {{ teamVoteCount() }} / {{ game.playerOrder.length }}
+                                            </p>
+
+                                            <p class="mb-4">Vote to AGREE or RETHROW.</p>
+                                            <button (click)="gameService.submitVote('agree')"
+                                                    [disabled]="!!game.teamVote?.votes?.[authService.userId()!]"
+                                                    class="bg-green-500 hover:bg-green-600 px-6 py-3 rounded text-lg mr-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                                    AGREE
+                                            </button>
+                                            <button (click)="gameService.submitVote('rethrow')"
+                                                    [disabled]="!!game.teamVote?.votes?.[authService.userId()!]">
+                                            </button>
+                                            <button (click)="gameService.submitVote('rethrow')" class="bg-red-500 hover:bg-red-600 px-6 py-3 rounded text-lg">RETHROW</button>
+                                        </div>
+                                    }
                                 </div>
                             }
                             @case ('mission') {

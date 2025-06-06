@@ -1367,17 +1367,64 @@ export class GameService {
         // Check if we need to restore a previous status (for human players)
         const previousStatus = game.previousStatus;
 
-        // Update the game
-        await this.firestoreService.updateDocument('games', gameId, {
-            players: updatedPlayers,
-            managementDeck: updatedDeck,
-            managementPhase: false, // End the management phase
-            managementCardPlayPhase: true, // Set the management card play phase
-            managementDesignatedPlayer: null, // Clear the designated player
-            status: previousStatus || game.status, // Restore previous status if it exists
-            previousStatus: null, // Clear the previous status
-            gameLog: [...(game.gameLog || []), ...gameLogEntries]
-        }, true);
+        // Check if the drawn card is HR - People Person, which should be played immediately
+        if (drawnCard === 'hr') {
+            // Update the game with the drawn card but transition to loyaltyReveal phase
+            await this.firestoreService.updateDocument('games', gameId, {
+                players: updatedPlayers,
+                managementDeck: updatedDeck,
+                managementPhase: false, // End the management phase
+                managementCardPlayPhase: false, // Don't set the management card play phase for HR card
+                managementDesignatedPlayer: null, // Clear the designated player
+                status: 'loyaltyReveal', // Set status to loyaltyReveal
+                loyaltyRevealPlayerId: currentUserId, // Set the player who is revealing their loyalty
+                previousStatus: previousStatus || game.status, // Store the previous status to return to after loyalty reveal
+                gameLog: [...(game.gameLog || []), ...gameLogEntries, {
+                    timestamp: new Date(),
+                    message: `${player.name} played their HR - People Person management card. ${player.name} can now select a player to reveal their loyalty to.`
+                }]
+            }, true);
+
+            // Record the played card
+            const playedCard = {
+                cardId: drawnCard,
+                playedBy: currentUserId,
+                playedAt: new Date()
+            };
+
+            // Add the card to the discard pile
+            const discardedCard = {
+                cardId: drawnCard,
+                playedBy: currentUserId,
+                discardedAt: new Date()
+            };
+            const discardedCards = [...(game.discardedManagementCards || []), discardedCard];
+
+            // Update the game to record the played card and add it to the discard pile
+            await this.firestoreService.updateDocument('games', gameId, {
+                playedManagementCard: playedCard,
+                discardedManagementCards: discardedCards,
+                players: {
+                    ...updatedPlayers,
+                    [currentUserId]: {
+                        ...updatedPlayers[currentUserId],
+                        managementCard: null // Remove the card from the player's hand
+                    }
+                }
+            }, true);
+        } else {
+            // For other cards, proceed as normal
+            await this.firestoreService.updateDocument('games', gameId, {
+                players: updatedPlayers,
+                managementDeck: updatedDeck,
+                managementPhase: false, // End the management phase
+                managementCardPlayPhase: true, // Set the management card play phase
+                managementDesignatedPlayer: null, // Clear the designated player
+                status: previousStatus || game.status, // Restore previous status if it exists
+                previousStatus: null, // Clear the previous status
+                gameLog: [...(game.gameLog || []), ...gameLogEntries]
+            }, true);
+        }
 
         // Determine if this is a human player or AI
         const isHumanPlayer = !currentUserId.startsWith(gameId + '-AI-');

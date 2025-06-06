@@ -45,7 +45,7 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                         <img src="assets/supercoder.png" alt="Team" class="absolute top-0 left-[-5px] w-8 h-[2rem] md:w-10">
                                     }
                                     <!-- Management designated player overlay -->
-                                    @if (playerId === game.managementDesignatedPlayer) {
+                                    @if (playerId === game.managementDesignatedPlayer || playerId === game.proposedManagementDesignatedPlayer) {
                                         <img src="assets/guido.png" alt="Management" class="absolute top-[-10px] left-[-5px] h-[4rem] w-[2rem]">
                                     }
                                     <!-- Management card indicator -->
@@ -434,6 +434,67 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                     }
                                 </div>
                             }
+                            @case ('serviceReassignment') {
+                                <div>
+                                    {{ initializeSelectedPlayers(game) }}
+                                    @if (authService.userId() === game.serviceReassignmentPlayerId) {
+                                        <p class="mb-2">
+                                            You played the VP R&D Service Reassignment card!
+                                            <strong class="text-yellow-300">You must exchange a player on the development team with a player not on the team.</strong>
+                                        </p>
+                                        <p class="mb-2">
+                                            Current team: <span class="font-bold">{{ getUserStoryTeamNames(game) }}</span>
+                                        </p>
+
+                                        <!-- Instructions based on selection state -->
+                                        @if (this.selectedPlayers.length === 0) {
+                                            <p class="text-yellow-300 mb-2">First, select a player ON the team to remove:</p>
+                                        } @else if (this.selectedPlayers.length === 1) {
+                                            <p class="text-yellow-300 mb-2">Now, select a player NOT on the team to add:</p>
+                                            <p class="mb-2">Player to remove: <span class="font-bold">{{ game.players[this.selectedPlayers[0]]?.name }}</span></p>
+                                        } @else if (this.selectedPlayers.length === 2) {
+                                            <p class="mb-2">Player to remove: <span class="font-bold">{{ game.players[this.selectedPlayers[0]]?.name }}</span></p>
+                                            <p class="mb-2">Player to add: <span class="font-bold">{{ game.players[this.selectedPlayers[1]]?.name }}</span></p>
+                                        }
+
+                                        <div class="flex flex-wrap gap-2 mb-4">
+                                            @for (playerId of game.playerOrder; track playerId) {
+                                                <button class="px-3 py-1 rounded"
+                                                        [ngClass]="{
+                                                            'bg-blue-500 text-white': selectedPlayers.includes(playerId),
+                                                            'bg-gray-300 text-black': !selectedPlayers.includes(playerId),
+                                                            'border-2 border-red-500': selectedPlayers[0] === playerId,
+                                                            'border-2 border-green-500': selectedPlayers[1] === playerId
+                                                        }"
+                                                        (click)="togglePlayerSelection(playerId, game)">
+                                                        {{ game.players[playerId]?.name }}
+                                                        @if (isPlayerOnUserStory(game) && playerId === selectedPlayers[0]) {
+                                                            <span class="text-xs">-</span>
+                                                        } @else if (!isPlayerOnUserStory(game) && playerId === selectedPlayers[1]) {
+                                                            <span class="text-xs">+</span>
+                                                        }
+                                                </button>
+                                            }
+                                        </div>
+
+                                        <button (click)="submitServiceReassignment(game)"
+                                                [disabled]="selectedPlayers.length !== 2"
+                                                class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded disabled:opacity-50 disabled:cursor-not-allowed">
+                                                Confirm Exchange
+                                        </button>
+                                    } @else {
+                                        <p class="mb-2">
+                                            {{ game.players[game.serviceReassignmentPlayerId!].name }} played the VP R&D Service Reassignment card!
+                                        </p>
+                                        <p class="mb-2">
+                                            <strong class="text-yellow-300">They are selecting a player to exchange on the development team.</strong>
+                                        </p>
+                                        <p class="mb-2">
+                                            Current team: <span class="font-bold">{{ getUserStoryTeamNames(game) }}</span>
+                                        </p>
+                                    }
+                                </div>
+                            }
                             @default {
                                 <p>Waiting for game to progress...</p>
                             }
@@ -815,6 +876,13 @@ export class GameBoardComponent {
         this.gameService.submitShiftingPrioritiesTeam(this.selectedPlayers, undefined);
     }
 
+    submitServiceReassignment(game: Game): void {
+        // Call the game service to submit the service reassignment
+        if (this.selectedPlayers.length === 2) {
+            this.gameService.submitServiceReassignment(this.selectedPlayers[0], this.selectedPlayers[1]);
+        }
+    }
+
     toggleManagementDesignation(playerId: string): void {
         // If the player is already designated, undesignate them
         if (this.managementDesignatedPlayer === playerId) {
@@ -861,6 +929,39 @@ export class GameBoardComponent {
                     this.selectedPlayers.push(playerId); // Add the new player
                 } else {
                     console.log("Cannot add more players, team is full and all members are from the original team");
+                }
+            }
+        } else if (game.status === 'serviceReassignment') {
+            // For Service Reassignment, we need to handle player selection differently
+            const missionTeam = game.mission?.team || [];
+
+            // First selection must be a player on the team (to remove)
+            if (this.selectedPlayers.length === 0) {
+                // Only allow selecting players on the team
+                if (!missionTeam.includes(playerId)) {
+                    console.log("First selection must be a player on the team to remove");
+                    return;
+                }
+                this.selectedPlayers.push(playerId);
+            }
+            // Second selection must be a player not on the team (to add)
+            else if (this.selectedPlayers.length === 1) {
+                // Only allow selecting players not on the team
+                if (missionTeam.includes(playerId)) {
+                    console.log("Second selection must be a player not on the team to add");
+                    return;
+                }
+                this.selectedPlayers.push(playerId);
+            }
+            // If both players are already selected, replace the appropriate one
+            else if (this.selectedPlayers.length === 2) {
+                // If selecting a player on the team, replace the first selection (player to remove)
+                if (missionTeam.includes(playerId)) {
+                    this.selectedPlayers[0] = playerId;
+                }
+                // If selecting a player not on the team, replace the second selection (player to add)
+                else {
+                    this.selectedPlayers[1] = playerId;
                 }
             }
         } else {

@@ -1964,6 +1964,71 @@ export class GameService {
         await this.inspectPlayerCard(targetPlayerId);
     }
 
+    // Function to handle service reassignment
+    async submitServiceReassignment(playerToRemove: string, playerToAdd: string): Promise<void> {
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = this.authService.userId();
+
+        if (!gameId || !game || !currentUserId) {
+            throw new Error("Game or user not available.");
+        }
+
+        // Check if we're in the service reassignment phase
+        if (game.status !== 'serviceReassignment' || !game.serviceReassignmentPhase) {
+            throw new Error("Not in service reassignment phase.");
+        }
+
+        // Check if the current user is the one who played the card
+        if (game.serviceReassignmentPlayerId !== currentUserId) {
+            throw new Error("You are not authorized to perform service reassignment.");
+        }
+
+        // Get the current mission team
+        const missionTeam = game.mission?.team || [];
+        if (missionTeam.length === 0) {
+            throw new Error("No team to modify.");
+        }
+
+        // Check if the player to remove is on the team
+        if (!missionTeam.includes(playerToRemove)) {
+            throw new Error("The player to remove is not on the team.");
+        }
+
+        // Check if the player to add is not on the team
+        if (missionTeam.includes(playerToAdd)) {
+            throw new Error("The player to add is already on the team.");
+        }
+
+        // Create the new team
+        const newTeam = [...missionTeam];
+        const removeIndex = newTeam.indexOf(playerToRemove);
+        newTeam.splice(removeIndex, 1, playerToAdd); // Replace the removed player with the added player
+
+        // Get the previous status to return to
+        const previousStatus = game.previousStatus || 'mission';
+
+        // Add a log entry
+        const gameLogEntry = {
+            timestamp: new Date(),
+            message: `${game.players[currentUserId].name} exchanged ${game.players[playerToRemove].name} with ${game.players[playerToAdd].name} on the development team.`
+        };
+
+        // Update the game
+        await this.firestoreService.updateDocument('games', gameId, {
+            status: previousStatus,
+            serviceReassignmentPlayerId: null,
+            serviceReassignmentPhase: false,
+            serviceReassignmentPlayerToRemove: null,
+            serviceReassignmentPlayerToAdd: null,
+            mission: {
+                ...game.mission,
+                team: newTeam
+            },
+            gameLog: [...(game.gameLog || []), gameLogEntry]
+        }, true);
+    }
+
     // Function to play a management card
     async playManagementCard(overrideUserId?: string): Promise<void> {
         const gameId = this.activeGameId();

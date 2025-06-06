@@ -1655,6 +1655,8 @@ export class GameService {
             managementPhase: false, // End the management phase
             managementCardPlayPhase: false, // Ensure management card play phase is also false
             managementDesignatedPlayer: null, // Clear the designated player
+            status: game.previousStatus || game.status, // Restore previous status if it exists
+            previousStatus: null, // Clear the previous status
             gameLog: [...(game.gameLog || []), gameLogEntry]
         }, true);
 

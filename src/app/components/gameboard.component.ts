@@ -48,6 +48,12 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                     @if (playerId === game.managementDesignatedPlayer) {
                                         <img src="assets/guido.png" alt="Management" class="absolute top-[-10px] left-[-5px] h-[4rem] w-[2rem]">
                                     }
+                                    <!-- Management card indicator -->
+                                    @if (getPlayerManagementCard(playerId, game)) {
+                                        <div class="absolute bottom-0 right-0 bg-purple-600 rounded-full w-6 h-6 flex items-center justify-center" title="Has Management Card">
+                                            <span class="text-white text-xs">M</span>
+                                        </div>
+                                    }
                                 </div>
                                 <div class="text-center">
                                     <span class="text-xs md:text-sm truncate w-full block">{{ game.players[playerId].name }}</span>
@@ -89,6 +95,14 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                         <div class="my-1 md:my-0">Current Phase: <strong class="text-yellow-400">{{ game.status | titlecase }}</strong></div>
                         <div>
                             Rethrows: <span class="font-bold">{{ game.voteFailsThisRound || 0 }}</span> / 5
+                        </div>
+                        <div class="my-1 md:my-0">
+                            Management: <span class="font-bold">{{ game.managementDeck?.length || 0 }}</span> cards left
+                            @if (game.discardedManagementCards && game.discardedManagementCards.length > 0) {
+                                <span class="text-xs cursor-help" [title]="getDiscardedCardsTooltip(game)">
+                                    ({{ game.discardedManagementCards.length }} discarded)
+                                </span>
+                            }
                         </div>
                     </div>
 
@@ -216,6 +230,12 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                                 </button>
                                             </div>
                                         </div>
+                                    } @else if (game.managementPhase) {
+                                        <!-- Show waiting message to other players when someone is drawing a management card -->
+                                        <div class="bg-purple-800 bg-opacity-80 p-4 rounded-lg mb-4">
+                                            <h3 class="text-xl font-bold mb-2">Management Card Phase</h3>
+                                            <p class="mb-4">{{ game.players[game.managementDesignatedPlayer!].name }} is drawing their management card. Please wait...</p>
+                                        </div>
                                     } @else {
                                         <p class="mb-2">Team proposed by {{ game.players[game.currentTO_id!].name }}. Vote:</p>
                                         <div class="mb-4 text-lg">
@@ -266,6 +286,12 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                                     Skip
                                                 </button>
                                             </div>
+                                        </div>
+                                    } @else if (game.managementPhase) {
+                                        <!-- Show waiting message to other players when someone is drawing a management card -->
+                                        <div class="bg-purple-800 bg-opacity-80 p-4 rounded-lg mb-4">
+                                            <h3 class="text-xl font-bold mb-2">Management Card Phase</h3>
+                                            <p class="mb-4">{{ game.players[game.managementDesignatedPlayer!].name }} is drawing their management card. Please wait...</p>
                                         </div>
                                     }
 
@@ -498,6 +524,7 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                         <!-- All Management Cards Section -->
                         <div class="mb-4">
                             <h3 class="text-xl font-bold mb-2 border-b border-gray-700 pb-2">Management Cards</h3>
+                            <p class="mb-2 text-sm">Cards left in deck: <span class="font-bold">{{ game.managementDeck?.length || 0 }}</span></p>
                             @for (cardId of getAllManagementCardIds(); track cardId) {
                                 <div class="bg-slate-800 p-3 rounded-lg mb-2">
                                     <div class="flex items-start gap-2">
@@ -1042,5 +1069,18 @@ export class GameBoardComponent {
     // Select one of the drawn cards to keep
     selectCEOCard(cardId: string, game: Game) {
         this.gameService.selectCEOCard(cardId);
+    }
+
+    // Get tooltip text for discarded management cards
+    getDiscardedCardsTooltip(game: Game): string {
+        if (!game.discardedManagementCards || game.discardedManagementCards.length === 0) {
+            return 'No discarded management cards';
+        }
+
+        return game.discardedManagementCards.map(card => {
+            const cardInfo = MANAGEMENT_CARDS[card.cardId];
+            const playerName = game.players[card.playedBy]?.name || 'Unknown';
+            return `${cardInfo.title} (${playerName})`;
+        }).join('\n');
     }
 }

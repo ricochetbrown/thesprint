@@ -551,6 +551,8 @@ export class GameService {
             },
             scopeCreepPlayerId: null, // Clear the Scope Creep player ID
             previousStatus: null, // Clear the previous status
+            managementPhase: false, // Ensure management phase is cleared
+            managementCardPlayPhase: false, // Ensure management card play phase is cleared
             gameLog: [...(game.gameLog || []), {
                 timestamp: new Date(),
                 message: `${game.players[currentUserId]?.name} added ${game.players[additionalPlayerId]?.name} to the team using the Scope Creep card.`
@@ -1577,6 +1579,7 @@ export class GameService {
         await this.firestoreService.updateDocument('games', gameId, {
             players: updatedPlayers,
             discardedManagementCards: discardedCards,
+            managementCardPlayPhase: false, // Ensure management card play phase is cleared
             gameLog: [...(game.gameLog || []), gameLogEntry]
         }, true);
 

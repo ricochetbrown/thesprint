@@ -46,7 +46,7 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                     }
                                     <!-- Management designated player overlay -->
                                     @if (playerId === game.managementDesignatedPlayer || playerId === game.proposedManagementDesignatedPlayer) {
-                                        <img src="assets/guido.png" alt="Management" class="absolute top-[-10px] left-[-5px] h-[4rem] w-[2rem]">
+                                        <img src="assets/management/guido.png" alt="Management" class="absolute top-[-10px] left-[-5px] h-[4rem] w-[2rem]">
                                     }
                                     <!-- Management card indicator -->
                                     @if (getPlayerManagementCard(playerId, game)) {

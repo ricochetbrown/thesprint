@@ -434,6 +434,63 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                     }
                                 </div>
                             }
+                            @case ('scopeCreep') {
+                                <div>
+                                    {{ initializeSelectedPlayers(game) }}
+                                    @if (authService.userId() === game.scopeCreepPlayerId) {
+                                        <p class="mb-2">
+                                            You played the CMO Scope Creep card!
+                                            <strong class="text-yellow-300">You must add an additional person to the development team.</strong>
+                                        </p>
+                                        <p class="mb-2">
+                                            Current team: <span class="font-bold">{{ getUserStoryTeamNames(game) }}</span>
+                                        </p>
+
+                                        <!-- Instructions based on selection state -->
+                                        @if (this.selectedPlayers.length === 0) {
+                                            <p class="text-yellow-300 mb-2">Select a player NOT on the team to add:</p>
+                                        } @else if (this.selectedPlayers.length === 1) {
+                                            <p class="mb-2">Player to add: <span class="font-bold">{{ game.players[this.selectedPlayers[0]]?.name }}</span></p>
+                                        }
+
+                                        <div class="flex flex-wrap gap-2 mb-4">
+                                            @for (playerId of game.playerOrder; track playerId) {
+                                                <!-- Only show players not already on the team -->
+                                                @if (!game.mission?.team?.includes(playerId)) {
+                                                    <button class="px-3 py-1 rounded"
+                                                            [ngClass]="{
+                                                                'bg-blue-500 text-white': selectedPlayers.includes(playerId),
+                                                                'bg-gray-300 text-black': !selectedPlayers.includes(playerId),
+                                                                'border-2 border-green-500': selectedPlayers[0] === playerId
+                                                            }"
+                                                            (click)="togglePlayerSelection(playerId, game)">
+                                                            {{ game.players[playerId]?.name }}
+                                                            @if (selectedPlayers.includes(playerId)) {
+                                                                <span class="text-xs">+</span>
+                                                            }
+                                                    </button>
+                                                }
+                                            }
+                                        </div>
+
+                                        <button (click)="submitScopeCreepTeam(game)"
+                                                [disabled]="selectedPlayers.length !== 1"
+                                                class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded disabled:opacity-50 disabled:cursor-not-allowed">
+                                                Add Player
+                                        </button>
+                                    } @else {
+                                        <p class="mb-2">
+                                            {{ game.players[game.scopeCreepPlayerId!].name }} played the CMO Scope Creep card!
+                                        </p>
+                                        <p class="mb-2">
+                                            <strong class="text-yellow-300">They are selecting an additional player to add to the development team.</strong>
+                                        </p>
+                                        <p class="mb-2">
+                                            Current team: <span class="font-bold">{{ getUserStoryTeamNames(game) }}</span>
+                                        </p>
+                                    }
+                                </div>
+                            }
                             @case ('serviceReassignment') {
                                 <div>
                                     {{ initializeSelectedPlayers(game) }}
@@ -874,6 +931,14 @@ export class GameBoardComponent {
     submitShiftingPrioritiesTeam(game: Game): void {
         console.log("Submit Shifting Priorities Team clicked");
         this.gameService.submitShiftingPrioritiesTeam(this.selectedPlayers, undefined);
+    }
+
+    submitScopeCreepTeam(game: Game): void {
+        console.log("Submit Scope Creep Team clicked");
+        // Call the game service to submit the additional player for Scope Creep
+        if (this.selectedPlayers.length === 1) {
+            this.gameService.submitScopeCreepTeam(this.selectedPlayers[0]);
+        }
     }
 
     submitServiceReassignment(game: Game): void {

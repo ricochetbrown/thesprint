@@ -31,7 +31,7 @@ export class GameService {
                     gameId,
                     (gameData) => {
                         this.currentGame.set(gameData);
-                        console.log("Game data updated:", gameData);
+                        console.log("Game data updated");
 
                         const currentUserId = this.authService.userId(); // Get current user ID inside the listener
                         const game = gameData; // Use the updated game data
@@ -40,13 +40,7 @@ export class GameService {
                         const currentTOId = game?.currentTO_id;
                         const isCurrentTOAnAI = currentTOId && gameId && currentTOId.startsWith(gameId + '-AI-'); // Check if the gameId is part of the AI ID
 
-                        console.log("AI Team Proposal Check:", {
-                            isCurrentTOAnAI,
-                            currentTOId,
-                            gameStatus: game?.status,
-                            hasTeamVote: !!game?.teamVote,
-                            currentUserId
-                        });
+                        console.log("AI Team Proposal Check");
 
                         if (game && currentTOId && isCurrentTOAnAI && game.status === 'teamProposal' && !game.teamVote) {
                             console.log("AI will propose a team now");
@@ -449,7 +443,7 @@ export class GameService {
             }
         });
 
-        console.log("Assigned roles:", assignedRoles);
+        console.log("Roles assigned successfully");
         return assignedRoles;
     }
 
@@ -1128,7 +1122,7 @@ export class GameService {
                 vote = Math.random() > 0.5 ? 'agree' : 'rethrow';
             }
 
-            console.log(`AI ${aiPlayerId} (${aiRole}) voting: ${vote}`);
+            console.log(`AI ${aiPlayerId} submitting vote`);
 
             // Add vote to the collection
             votes[aiPlayerId] = vote;
@@ -1537,26 +1531,8 @@ export class GameService {
             message: `${player.name} chose not to play their management card.`
         };
 
-        // Add the card to the discard pile
-        const cardId = player.managementCard;
-        const discardedCard = {
-            cardId: cardId,
-            playedBy: currentUserId,
-            discardedAt: new Date()
-        };
-        const discardedCards = [...(game.discardedManagementCards || []), discardedCard];
-
-        // Update the player's management card (remove it)
-        const updatedPlayers = { ...game.players };
-        updatedPlayers[currentUserId] = {
-            ...player,
-            managementCard: null
-        };
-
-        // Update the game
+        // Update the game - keep the management card for the player
         await this.firestoreService.updateDocument('games', gameId, {
-            players: updatedPlayers,
-            discardedManagementCards: discardedCards,
             managementCardPlayPhase: false, // Ensure management card play phase is cleared
             gameLog: [...(game.gameLog || []), gameLogEntry]
         }, true);
@@ -2953,7 +2929,7 @@ export class GameService {
                 card = 'approve';
             }
 
-            console.log(`submitAllAIMissionCards: AI ${aiPlayerId} (${aiRole}) playing mission card: ${card}`);
+            console.log(`submitAllAIMissionCards: AI ${aiPlayerId} playing mission card`);
 
             // Add card to the collection
             cards[aiPlayerId] = card;
@@ -3027,9 +3003,7 @@ export class GameService {
             throw new Error("Game or user not available.");
         }
 
-        console.log("submitMissionCard: Game status", game.status);
-        console.log("submitMissionCard: Mission team", game.mission?.team);
-        console.log("submitMissionCard: Current user", currentUserId);
+        console.log("submitMissionCard: Processing mission card");
 
         // Check if we're in the management phase or management card play phase - if so, don't submit any cards yet
         if (game.managementPhase || game.managementCardPlayPhase) {
@@ -3081,6 +3055,81 @@ export class GameService {
         console.log("submitMissionCard: Completed");
     }
 
+    // Function to handle the Sniper's assassination attempt
+    async submitAssassination(targetPlayerId: string): Promise<void> {
+        console.log("submitAssassination: Starting with target", targetPlayerId);
+        const gameId = this.activeGameId();
+        const game = this.currentGame();
+        const currentUserId = this.authService.userId();
+
+        if (!gameId || !game || !currentUserId) {
+            console.error("submitAssassination: Game or user not available");
+            return;
+        }
+
+        // Verify the game is in assassination phase
+        if (game.status !== 'assassination') {
+            console.error("submitAssassination: Game not in assassination phase");
+            return;
+        }
+
+        // Verify the current user is the Sniper
+        if (!game.assassination || game.assassination.sniperId !== currentUserId) {
+            console.error("submitAssassination: Current user is not the Sniper");
+            return;
+        }
+
+        // Verify the target is a valid player
+        if (!game.players[targetPlayerId]) {
+            console.error("submitAssassination: Invalid target player");
+            return;
+        }
+
+        console.log("submitAssassination: Processing assassination attempt");
+
+        // Update the assassination object with the target ID
+        try {
+            await this.firestoreService.updateDocument('games', gameId, {
+                'assassination.targetId': targetPlayerId
+            }, true);
+            console.log("submitAssassination: Target updated successfully");
+        } catch (error) {
+            console.error("submitAssassination: Error updating target", error);
+            return;
+        }
+
+        // Determine if the assassination was successful (target is Duke)
+        const targetRole = game.roles?.[targetPlayerId];
+        const isSuccessful = targetRole === 'Duke';
+        let winner: 'dexter' | 'sinister';
+        let message: string;
+
+        if (isSuccessful) {
+            // If the target is the Duke, Sinister wins
+            winner = 'sinister';
+            message = `The Sniper successfully assassinated the Duke! SINISTER WINS!`;
+        } else {
+            // If the target is not the Duke, Dexter wins
+            winner = 'dexter';
+            message = `The Sniper failed to assassinate the Duke. DEXTER WINS!`;
+        }
+
+        // Update the game state to game over with the appropriate winner
+        try {
+            await this.firestoreService.updateDocument('games', gameId, {
+                status: 'gameOver',
+                winner: winner,
+                gameLog: [...(game.gameLog || []), {
+                    timestamp: new Date(),
+                    message: message
+                }]
+            }, true);
+            console.log("submitAssassination: Game over, winner is", winner);
+        } catch (error) {
+            console.error("submitAssassination: Error updating game state", error);
+        }
+    }
+
     // Helper method to check if all players on the mission have played their cards
     private async checkIfAllCardsPlayed(game: Game, updatedCardsPlayed: {[playerId: string]: 'approve' | 'request'}): Promise<void> {
         const gameId = this.activeGameId();
@@ -3117,10 +3166,7 @@ export class GameService {
 
         const allPlayed = missionTeam.every(playerId => combinedCardsPlayed.hasOwnProperty(playerId));
 
-        console.log("checkIfAllCardsPlayed: Mission team:", missionTeam);
-        console.log("checkIfAllCardsPlayed: Latest cards played:", latestCardsPlayed);
-        console.log("checkIfAllCardsPlayed: Updated cards played:", updatedCardsPlayed);
-        console.log("checkIfAllCardsPlayed: Combined cards played:", combinedCardsPlayed);
+        console.log("checkIfAllCardsPlayed: Processing mission cards");
         console.log("checkIfAllCardsPlayed: All played:", allPlayed);
 
         // If all players on the mission have played their cards, process the results
@@ -3398,9 +3444,43 @@ export class GameService {
             console.log("nextRound: Dexter wins", dexterWins, "Sinister wins", sinisterWins);
 
             if (dexterWins > sinisterWins) {
-                // Dexter wins unless there's an assassination phase
-                // TODO: Implement assassination phase logic if applicable
-                winner = 'dexter';
+                // Check if there's a Sniper in the game
+                let sniperId: string | undefined = undefined;
+                for (const playerId in game.roles) {
+                    if (game.roles[playerId] === 'Sniper') {
+                        sniperId = playerId;
+                        break;
+                    }
+                }
+
+                if (sniperId) {
+                    // If there's a Sniper, transition to the assassination phase
+                    console.log("nextRound: Dexter has more wins, but there's a Sniper. Moving to assassination phase.");
+
+                    // Update game state to assassination phase
+                    const updateData: any = {
+                        status: 'assassination',
+                        assassination: {
+                            sniperId: sniperId
+                        },
+                        gameLog: [...(game.gameLog || []), {
+                            timestamp: new Date(),
+                            message: `Dexter has won more stories, but the Sniper gets a chance to assassinate the Duke!`
+                        }],
+                    };
+
+                    await this.firestoreService.updateDocument(
+                        'games',
+                        gameId,
+                        updateData,
+                        true
+                    );
+                    console.log("nextRound: Game state updated to assassination phase");
+                    return; // Exit the function early
+                } else {
+                    // If there's no Sniper, Dexter wins
+                    winner = 'dexter';
+                }
             } else if (sinisterWins >= dexterWins) {
                  // Sinister wins if they have more or equal failed missions
                  winner = 'sinister';

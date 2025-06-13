@@ -362,6 +362,37 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                 <button (click)="nextRound()" class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded">Next Round</button>
                                 </div>
                             }
+                            @case ('assassination') {
+                                <div>
+                                    @if (authService.userId() === game.assassination?.sniperId) {
+                                        <h3 class="text-xl font-bold mb-4">You are the Sniper!</h3>
+                                        <p class="mb-4">Dexter has won more stories, but you have one last chance to win the game for Sinister.</p>
+                                        <p class="mb-4 text-yellow-300">Select a Dexter player who you think is the Duke. If you're correct, Sinister wins!</p>
+
+                                        <div class="flex flex-wrap gap-2 mb-4">
+                                            @for (playerId of game.playerOrder; track playerId) {
+                                                @if (game.roles && game.roles[playerId] !== 'SinisterSpy' && game.roles[playerId] !== 'Sniper' && game.roles[playerId] !== 'Nerlin' && game.roles[playerId] !== 'DevSlayer') {
+                                                    <button class="px-3 py-1 rounded"
+                                                            [ngClass]="{'bg-red-500 text-white': selectedPlayers.includes(playerId), 'bg-gray-300 text-black': !selectedPlayers.includes(playerId)}"
+                                                            (click)="togglePlayerSelection(playerId, game)">
+                                                            {{ game.players[playerId]?.name }}
+                                                    </button>
+                                                }
+                                            }
+                                        </div>
+
+                                        <button (click)="submitAssassination(game)"
+                                                [disabled]="selectedPlayers.length !== 1"
+                                                class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded disabled:opacity-50 disabled:cursor-not-allowed">
+                                                Assassinate
+                                        </button>
+                                    } @else {
+                                        <h3 class="text-xl font-bold mb-4">Assassination Phase</h3>
+                                        <p class="mb-4">Dexter has won more stories, but the Sniper gets one last chance to win the game for Sinister.</p>
+                                        <p class="mb-4">Waiting for {{ game.players[game.assassination?.sniperId!]?.name }} (Sniper) to select a target...</p>
+                                    }
+                                </div>
+                            }
                             @case ('gameOver') {
                                 <div>
                                     <h3 class="text-3xl font-bold mb-2">{{ game.winner }} Wins!</h3>
@@ -404,7 +435,6 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                                 }
                                             </div>
                                         }
-                                        <!-- If no players have management cards, show drawn cards -->
                                         @else if (game.ceoCardDrawnCards && game.ceoCardDrawnCards.length > 0) {
                                             <p class="mb-4">No other players have management cards. Select one of these cards to keep:</p>
                                             <div class="flex flex-wrap gap-4 mb-4">
@@ -421,7 +451,6 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                                 }
                                             </div>
                                         }
-                                        <!-- If no cards have been drawn yet -->
                                         @else {
                                             <p class="mb-4">No other players have management cards. Drawing two cards for you to choose from...</p>
                                             <button (click)="drawCEOCards(game)"
@@ -832,6 +861,7 @@ export class GameBoardComponent {
             case 'gameOver': return 'Game Over';
             case 'shiftingPriorities': return 'Shifting Priorities - Team Selection';
             case 'ceoCardPlay': return 'CEO Card: The Real Boss!';
+            case 'assassination': return 'Assassination - Sniper\'s Turn';
             default: return status.charAt(0).toUpperCase() + status.slice(1);
         }
     }
@@ -1029,6 +1059,25 @@ export class GameBoardComponent {
                     this.selectedPlayers[1] = playerId;
                 }
             }
+        } else if (game.status === 'assassination') {
+            // For Assassination phase, we need to handle player selection differently
+            const myId = this.authService.userId();
+
+            // Only the Sniper can select a target
+            if (!game.assassination || game.assassination.sniperId !== myId) {
+                console.log("Only the Sniper can select a target during the Assassination phase");
+                return;
+            }
+
+            // Check if the player is on the Dexter team
+            const playerRole = game.roles?.[playerId];
+            if (playerRole && (playerRole === 'SinisterSpy' || playerRole === 'Sniper' || playerRole === 'Nerlin' || playerRole === 'DevSlayer')) {
+                console.log("Cannot select a Sinister player as the assassination target");
+                return;
+            }
+
+            // Clear any previous selection and select the new target
+            this.selectedPlayers = [playerId];
         } else {
             // Regular team proposal logic
             const numToSelect = this.getNumToSelect(game);
@@ -1051,6 +1100,15 @@ export class GameBoardComponent {
 
     nextRound(): void {
         this.gameService.nextRound();
+    }
+
+    submitAssassination(game: Game): void {
+        console.log("Submit Assassination clicked");
+        if (this.selectedPlayers.length !== 1) {
+            console.log("Must select exactly one target for assassination");
+            return;
+        }
+        this.gameService.submitAssassination(this.selectedPlayers[0]);
     }
 
     isPlayerDukeForSupportManager(playerId: string, game: Game): boolean {

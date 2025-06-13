@@ -66,9 +66,17 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                         </span>
                                     }
                                     @if (game.status === 'teamVoting' && game.teamVote?.votes) {
-                                        <span class="text-xs" [ngClass]="{'text-yellow-300': game.teamVote?.votes?.[playerId] === undefined, 'text-green-300': game.teamVote?.votes?.[playerId] === 'agree', 'text-red-300': game.teamVote?.votes?.[playerId] === 'rethrow'}">
-                                            {{ game.teamVote?.votes?.[playerId] ? (game.teamVote?.votes?.[playerId] === 'agree' ? 'Agreed' : 'Rethrow') : 'Not Voted' }}
-                                        </span>
+                                        @if (Object.keys(game.teamVote.votes).length === game.playerOrder.length) {
+                                            <!-- Show actual vote only after everyone has voted -->
+                                            <span class="text-xs" [ngClass]="{'text-yellow-300': game.teamVote?.votes?.[playerId] === undefined, 'text-green-300': game.teamVote?.votes?.[playerId] === 'agree', 'text-red-300': game.teamVote?.votes?.[playerId] === 'rethrow'}">
+                                                {{ game.teamVote?.votes?.[playerId] ? (game.teamVote?.votes?.[playerId] === 'agree' ? 'Agreed' : 'Rethrow') : 'Not Voted' }}
+                                            </span>
+                                        } @else {
+                                            <!-- Only show if voted or not until everyone has voted -->
+                                            <span class="text-xs" [ngClass]="{'text-yellow-300': game.teamVote?.votes?.[playerId] === undefined, 'text-blue-300': game.teamVote?.votes?.[playerId] !== undefined}">
+                                                {{ game.teamVote?.votes?.[playerId] ? 'Voted' : 'Not Voted' }}
+                                            </span>
+                                        }
                                     }
                                 </div>
                             </div>

@@ -334,6 +334,9 @@ export class GameService {
     }
 
     private assignRoles(playerIds: string[], game: Game): { [playerId: string]: string } {
+        // Shuffle the playerIds array to randomize role assignment
+        const shuffledPlayerIds = this.shuffleArray([...playerIds]);
+
         const numPlayers = playerIds.length;
         const assignedRoles: { [playerId: string]: string } = {};
         let rolesToAssign: string[] = [];
@@ -431,10 +434,11 @@ export class GameService {
             }
         }
 
-        // Shuffle roles and assign
-        rolesToAssign.sort(() => Math.random() - 0.5);
+        // Shuffle roles
+        rolesToAssign = this.shuffleArray(rolesToAssign);
 
-        playerIds.forEach((id, index) => {
+        // Assign roles to shuffled player IDs
+        shuffledPlayerIds.forEach((id, index) => {
             if (index < rolesToAssign.length) {
                 assignedRoles[id] = rolesToAssign[index];
             } else {

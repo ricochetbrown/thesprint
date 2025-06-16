@@ -66,7 +66,7 @@ import { MANAGEMENT_CARDS } from "../interfaces/management-card.interface";
                                         </span>
                                     }
                                     @if (game.status === 'teamVoting' && game.teamVote?.votes) {
-                                        @if (Object.keys(game.teamVote.votes).length === game.playerOrder.length) {
+                                        @if (allPlayersVoted()) {
                                             <!-- Show actual vote only after everyone has voted -->
                                             <span class="text-xs" [ngClass]="{'text-yellow-300': game.teamVote?.votes?.[playerId] === undefined, 'text-green-300': game.teamVote?.votes?.[playerId] === 'agree', 'text-red-300': game.teamVote?.votes?.[playerId] === 'rethrow'}">
                                                 {{ game.teamVote?.votes?.[playerId] ? (game.teamVote?.votes?.[playerId] === 'agree' ? 'Agreed' : 'Rethrow') : 'Not Voted' }}
@@ -806,6 +806,14 @@ export class GameBoardComponent {
             return Object.keys(game.teamVote.votes).length;
         }
         return 0;
+    });
+
+    allPlayersVoted = computed(() => {
+        const game = this.gameService.currentGame();
+        if (game?.teamVote?.votes && game.playerOrder) {
+            return Object.keys(game.teamVote.votes).length === game.playerOrder.length;
+        }
+        return false;
     });
 
     userStoryCardsPlayedCount = computed(() => {
